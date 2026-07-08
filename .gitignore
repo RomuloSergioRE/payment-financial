@@ -1,0 +1,18 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+*.sln.docstates
+.DS_Store
+*.log
+logs/
+
+# Environment
+.env
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.swp
