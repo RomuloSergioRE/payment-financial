@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Payment.Api.Middleware;
 using Payment.Application;
 using Payment.Infrastructure;
 using Serilog;
@@ -92,6 +93,7 @@ try
     var app = builder.Build();
 
     app.UseSerilogRequestLogging();
+    app.UseMiddleware<ExceptionHandlingMiddleware>();
 
     if (app.Environment.IsDevelopment())
     {
@@ -102,6 +104,7 @@ try
     app.UseCors();
     app.UseRateLimiter();
     app.UseAuthentication();
+    app.UseMiddleware<JwtUserMiddleware>();
     app.UseAuthorization();
     app.MapControllers();
 
