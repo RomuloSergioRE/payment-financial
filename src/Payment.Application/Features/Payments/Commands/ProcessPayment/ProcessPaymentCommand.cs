@@ -1,4 +1,5 @@
 using MediatR;
+using Payment.Application.Common.Behaviours;
 
 namespace Payment.Application.Features.Payments.Commands.ProcessPayment;
 
@@ -14,4 +15,4 @@ public sealed record ProcessPaymentCommand(
     int? CardExpiryMonth,
     int? CardExpiryYear,
     string? CardHolderName
-) : IRequest<ProcessPaymentResponse>;
+) : IRequest<ProcessPaymentResponse>, IPublishableRequest;

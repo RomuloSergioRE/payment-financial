@@ -17,6 +17,7 @@ builder.ConfigureServices((context, services) =>
     services.AddInfrastructureServices(context.Configuration);
 
     services.AddHostedService<PaymentCompletedConsumer>();
+    services.AddHostedService<OutboxProcessor>();
 });
 
 var host = builder.Build();

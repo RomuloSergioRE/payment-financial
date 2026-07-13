@@ -11,6 +11,7 @@ public sealed class PaymentDbContext : DbContext, IPaymentDbContext
 
     public DbSet<Domain.Entities.Payment> Payments => Set<Domain.Entities.Payment>();
     public DbSet<PaymentLog> PaymentLogs => Set<PaymentLog>();
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

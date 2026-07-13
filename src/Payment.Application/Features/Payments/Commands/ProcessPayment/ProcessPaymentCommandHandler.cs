@@ -17,18 +17,15 @@ public sealed class ProcessPaymentCommandHandler
 {
     private readonly IPaymentDbContext _context;
     private readonly IPaymentGateway _gateway;
-    private readonly IMessageBus _bus;
     private readonly ILogger<ProcessPaymentCommandHandler> _logger;
 
     public ProcessPaymentCommandHandler(
         IPaymentDbContext context,
         IPaymentGateway gateway,
-        IMessageBus bus,
         ILogger<ProcessPaymentCommandHandler> logger)
     {
         _context = context;
         _gateway = gateway;
-        _bus = bus;
         _logger = logger;
     }
 
@@ -96,19 +93,6 @@ public sealed class ProcessPaymentCommandHandler
             payment.MarkCompleted(result.GatewayPaymentId, result.RawResponse ?? "{}");
             _context.PaymentLogs.Add(new PaymentLog(
                 payment.Id, PaymentLog.EventTypes.Completed));
-
-            await _context.SaveChangesAsync(cancellationToken);
-
-            var paymentEvent = new PaymentCompletedEvent(
-                EventId: Guid.NewGuid().ToString(),
-                Type: "payment.completed",
-                Timestamp: DateTime.UtcNow,
-                Data: new PaymentCompletedData(
-                    payment.Id, payment.UserId, command.PlanType,
-                    money.Amount, money.Currency, command.PaymentMethod,
-                    payment.PaidAt!.Value));
-
-            await _bus.PublishAsync(paymentEvent, "payment.completed", cancellationToken);
         }
         else
         {
@@ -116,9 +100,9 @@ public sealed class ProcessPaymentCommandHandler
             _context.PaymentLogs.Add(new PaymentLog(
                 payment.Id, PaymentLog.EventTypes.Failed,
                 new { error = result.GatewayMessage }));
-
-            await _context.SaveChangesAsync(cancellationToken);
         }
+
+        await _context.SaveChangesAsync(cancellationToken);
 
         return MapToResponse(payment);
     }

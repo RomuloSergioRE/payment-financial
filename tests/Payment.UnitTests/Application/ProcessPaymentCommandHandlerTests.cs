@@ -15,7 +15,6 @@ public class ProcessPaymentCommandHandlerTests : IDisposable
 {
     private readonly global::Payment.Infrastructure.Persistence.PaymentDbContext _context;
     private readonly Mock<IPaymentGateway> _gatewayMock = new();
-    private readonly Mock<IMessageBus> _busMock = new();
     private readonly Mock<ILogger<ProcessPaymentCommandHandler>> _loggerMock = new();
     private readonly ProcessPaymentCommandHandler _handler;
 
@@ -25,7 +24,6 @@ public class ProcessPaymentCommandHandlerTests : IDisposable
         _handler = new ProcessPaymentCommandHandler(
             _context,
             _gatewayMock.Object,
-            _busMock.Object,
             _loggerMock.Object);
     }
 
@@ -65,10 +63,6 @@ public class ProcessPaymentCommandHandlerTests : IDisposable
         _gatewayMock.Verify(g => g.ProcessCreditCardAsync(
             It.IsAny<decimal>(), It.IsAny<string>(), It.IsAny<string>(),
             It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>()), Times.Once);
-        _busMock.Verify(b => b.PublishAsync(
-            It.IsAny<PaymentCompletedEvent>(),
-            "payment.completed",
-            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -195,7 +189,7 @@ public class ProcessPaymentCommandHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task FailedPayment_DoesNotPublishEvent()
+    public async Task FailedPayment_DoesNotCreateOutboxEntry()
     {
         var command = ValidCommand("no-event-key");
 
@@ -206,10 +200,7 @@ public class ProcessPaymentCommandHandlerTests : IDisposable
 
         await _handler.Handle(command, CancellationToken.None);
 
-        _busMock.Verify(b => b.PublishAsync(
-            It.IsAny<PaymentCompletedEvent>(),
-            It.IsAny<string>(),
-            It.IsAny<CancellationToken>()), Times.Never);
+        _context.OutboxMessages.Should().BeEmpty();
     }
 
     public void Dispose()

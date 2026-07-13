@@ -27,7 +27,6 @@ public class ProcessPaymentIntegrationTests : IDisposable
         var handler = new ProcessPaymentCommandHandler(
             _context,
             Mock.Of<global::Payment.Application.Common.Interfaces.IPaymentGateway>(),
-            Mock.Of<global::Payment.Application.Common.Interfaces.IMessageBus>(),
             Mock.Of<ILogger<ProcessPaymentCommandHandler>>());
 
         var command = new ProcessPaymentCommand(
