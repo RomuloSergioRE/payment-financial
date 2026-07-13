@@ -31,8 +31,9 @@ public sealed class PaymentsController : ControllerBase
         if (userId is null)
             return Unauthorized(new { error = "Invalid token" });
 
-        var idempotencyKey = Request.Headers["Idempotency-Key"].FirstOrDefault()
-            ?? Guid.NewGuid().ToString();
+        var idempotencyKey = Request.Headers["Idempotency-Key"].FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(idempotencyKey))
+            return BadRequest(new { error = "Idempotency-Key header is required" });
 
         var command = new ProcessPaymentCommand(
             userId.Value,

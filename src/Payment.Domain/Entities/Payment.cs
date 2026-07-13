@@ -62,4 +62,10 @@ public sealed class Payment
         RefundedAt = DateTime.UtcNow;
         UpdatedAt = DateTime.UtcNow;
     }
+
+    public void MarkCancelled()
+    {
+        Status = PaymentStatus.Cancelled;
+        UpdatedAt = DateTime.UtcNow;
+    }
 }

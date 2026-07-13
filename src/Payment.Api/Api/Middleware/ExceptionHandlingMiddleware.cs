@@ -42,6 +42,13 @@ public sealed class ExceptionHandlingMiddleware
                 details = errors
             });
         }
+        catch (DuplicatePaymentException ex)
+        {
+            _logger.LogWarning(ex, "Duplicate payment detected");
+            context.Response.StatusCode = 409;
+            context.Response.ContentType = "application/json";
+            await WriteJsonAsync(context, new { error = ex.Message });
+        }
         catch (NotFoundException ex)
         {
             _logger.LogWarning(ex, "Resource not found");

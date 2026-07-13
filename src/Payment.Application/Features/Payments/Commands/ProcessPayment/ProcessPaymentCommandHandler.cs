@@ -2,6 +2,7 @@ using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Payment.Application.Common.Exceptions;
 using Payment.Application.Common.Interfaces;
 using Payment.Application.Common.Models;
 using Payment.Domain.Entities;
@@ -44,7 +45,7 @@ public sealed class ProcessPaymentCommandHandler
             _logger.LogWarning(
                 "Duplicate payment attempt. IdempotencyKey: {Key}, ExistingStatus: {Status}",
                 command.IdempotencyKey, existing.Status);
-            return MapToResponse(existing);
+            throw new DuplicatePaymentException(command.IdempotencyKey);
         }
 
         var planType = command.PlanType == "pro" ? PlanType.Pro : PlanType.Enterprise;

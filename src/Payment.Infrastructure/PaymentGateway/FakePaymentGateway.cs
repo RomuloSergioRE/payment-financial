@@ -15,20 +15,20 @@ public sealed class FakePaymentGateway : IPaymentGateway
     public FakePaymentGateway(ILogger<FakePaymentGateway> logger)
         => _logger = logger;
 
-    public Task<PaymentResult> ProcessCreditCardAsync(
+    public async Task<PaymentResult> ProcessCreditCardAsync(
         decimal amount, string cardNumber, string cvv,
         int expiryMonth, int expiryYear, string holderName)
     {
         if (!LuhnCheck(cardNumber))
-            return Task.FromResult(new PaymentResult(
-                false, string.Empty, "Invalid card number", null));
+            return new PaymentResult(
+                false, string.Empty, "Invalid card number", null);
 
         if (expiryYear < DateTime.UtcNow.Year ||
             (expiryYear == DateTime.UtcNow.Year && expiryMonth < DateTime.UtcNow.Month))
-            return Task.FromResult(new PaymentResult(
-                false, string.Empty, "Card expired", null));
+            return new PaymentResult(
+                false, string.Empty, "Card expired", null);
 
-        Thread.Sleep(_random.Next(500, 2000));
+        await Task.Delay(_random.Next(500, 2000));
 
         var success = _random.NextDouble() < SuccessRate;
 
@@ -43,17 +43,15 @@ public sealed class FakePaymentGateway : IPaymentGateway
                 status = "approved",
                 brand
             });
-            return Task.FromResult(new PaymentResult(
-                true, gatewayId, "Approved", raw));
+            return new PaymentResult(true, gatewayId, "Approved", raw);
         }
 
-        return Task.FromResult(new PaymentResult(
-            false, string.Empty, "Card declined by issuer", null));
+        return new PaymentResult(false, string.Empty, "Card declined by issuer", null);
     }
 
-    public Task<PaymentResult> ProcessPixAsync(decimal amount)
+    public async Task<PaymentResult> ProcessPixAsync(decimal amount)
     {
-        Thread.Sleep(_random.Next(100, 500));
+        await Task.Delay(_random.Next(100, 500));
 
         var pixCode = Guid.NewGuid().ToString("N").ToUpper()[..32];
         var gatewayId = $"pix_{Guid.NewGuid():N}";
@@ -67,8 +65,7 @@ public sealed class FakePaymentGateway : IPaymentGateway
             status = "completed"
         });
 
-        return Task.FromResult(new PaymentResult(
-            true, gatewayId, "PIX completed", raw));
+        return new PaymentResult(true, gatewayId, "PIX completed", raw);
     }
 
     public Task<PaymentResult> ProcessBoletoAsync(decimal amount)

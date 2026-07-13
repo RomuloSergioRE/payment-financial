@@ -51,7 +51,7 @@ public sealed class CancelPaymentCommandHandler
                 $"Cannot cancel payment with status '{payment.Status}'. Only pending payments can be cancelled.");
         }
 
-        payment.MarkRefunded();
+        payment.MarkCancelled();
         _context.PaymentLogs.Add(new Domain.Entities.PaymentLog(
             payment.Id, "payment.cancelled"));
 
