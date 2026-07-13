@@ -14,6 +14,16 @@ Microserviço de pagamentos do ecossistema zenyFin. Processa upgrades de plano (
 - State machine com guardas de transição de estado no domínio
 - Logs estruturados com Serilog (sem dados sensíveis)
 - Retry com Polly e Dead Letter Queue
+- Health checks profundos (PostgreSQL + RabbitMQ)
+- List Payments com paginação e filtro por status
+- Refund Flow (reembolso de pagamentos)
+- Unit of Work com transações automáticas
+- Correlation ID para rastreabilidade de requisições
+- Outbox Pattern para publicação confiável de eventos
+- Domain Events (padrão DDD)
+- InMemory Caching para queries frequentes
+- Per-user Rate Limiting (Token Bucket partitioned by userId)
+- Worker Service com consumer RabbitMQ
 
 ## Tech Stack
 
@@ -30,6 +40,8 @@ Microserviço de pagamentos do ecossistema zenyFin. Processa upgrades de plano (
 | JWT | System.IdentityModel.Tokens.Jwt 7 |
 | Logs | Serilog 4 + Seq |
 | Retry | Polly 8 |
+| Cache | Microsoft.Extensions.Caching.Memory |
+| Health Checks | Microsoft.Extensions.Diagnostics.HealthChecks |
 | Testes | xUnit + Moq + FluentAssertions |
 | Documentação | Swagger / Swashbuckle 6 |
 
@@ -40,10 +52,21 @@ payment-financial/
 ├── Payment.Api.sln
 ├── src/
 │   ├── Payment.Api/              # API + DI + Middleware
-│   ├── Payment.Domain/           # Entidades, Enums, Value Objects
+│   │   └── Api/
+│   │       ├── Controllers/      # Payments, Health
+│   │       └── Middleware/       # ExceptionHandling, OriginValidation, JwtUser, CorrelationId
+│   ├── Payment.Domain/           # Entidades, Value Objects, Events
+│   │   └── Entities/             # Payment, PaymentLog, Money, OutboxMessage
 │   ├── Payment.Application/      # CQRS + MediatR + FluentValidation
-│   ├── Payment.Infrastructure/   # EF Core, RabbitMQ, JWT, Gateway
+│   │   └── Features/Payments/
+│   │       ├── Commands/         # ProcessPayment, CancelPayment, RefundPayment
+│   │       ├── Queries/          # GetPayment, ListPayments
+│   │       └── Events/           # PaymentCompletedDomainEvent
+│   ├── Payment.Infrastructure/   # EF Core, RabbitMQ, JWT, Gateway, Health Checks
+│   │   ├── Caching/              # InMemoryCacheService
+│   │   └── HealthChecks/         # PostgresHealthCheck, RabbitMqHealthCheck
 │   └── Payment.Worker/           # Background Service
+│       └── Consumers/            # PaymentCompletedConsumer, OutboxProcessor
 ├── tests/
 │   ├── Payment.UnitTests/        # Testes unitários (xUnit)
 │   └── Payment.IntegrationTests/ # Testes de integração (xUnit)
@@ -119,10 +142,13 @@ ASPNETCORE_URLS=http://localhost:5001
 
 | Método | Rota | Descrição | Autenticação | Rate Limit |
 |--------|------|-----------|-------------|------------|
-| GET | `/health` | Health check | Não | — |
-| POST | `/api/payments` | Processar pagamento | JWT Bearer | 10 req/min |
-| GET | `/api/payments/{id}` | Consultar pagamento | JWT Bearer | — |
-| DELETE | `/api/payments/{id}` | Cancelar pagamento | JWT Bearer | 3 req/min |
+| GET | `/health` | Health check profundo | Não | — |
+| GET | `/health/live` | Liveness probe | Não | — |
+| POST | `/api/payments` | Processar pagamento | JWT Bearer | 20 tokens/min |
+| GET | `/api/payments` | Listar pagamentos | JWT Bearer | 20 tokens/min |
+| GET | `/api/payments/{id}` | Consultar pagamento | JWT Bearer | 20 tokens/min |
+| DELETE | `/api/payments/{id}` | Cancelar pagamento | JWT Bearer | 20 tokens/min |
+| POST | `/api/payments/{id}/refund` | Reembolsar pagamento | JWT Bearer | 20 tokens/min |
 
 ### Exemplo de requisição (cartão de crédito)
 
@@ -159,11 +185,38 @@ curl -X POST http://localhost:5001/api/payments \
   }'
 ```
 
+### Exemplo de requisição (listar pagamentos)
+
+```bash
+# Listar todos os pagamentos
+curl http://localhost:5001/api/payments \
+  -H "Authorization: Bearer <token>"
+
+# Filtrar por status
+curl "http://localhost:5001/api/payments?status=completed" \
+  -H "Authorization: Bearer <token>"
+
+# Com paginação
+curl "http://localhost:5001/api/payments?page=1&pageSize=10" \
+  -H "Authorization: Bearer <token>"
+```
+
 ### Exemplo de requisição (cancelamento)
 
 ```bash
 curl -X DELETE http://localhost:5001/api/payments/<payment-id> \
   -H "Authorization: Bearer <token>"
+```
+
+### Exemplo de requisição (reembolso)
+
+```bash
+curl -X POST http://localhost:5001/api/payments/<payment-id>/refund \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "reason": "Cliente solicitou cancelamento"
+  }'
 ```
 
 ## Cartões de Teste
@@ -180,20 +233,31 @@ curl -X DELETE http://localhost:5001/api/payments/<payment-id> \
 - Serilog (bootstrap + request logging)
 - ExceptionHandlingMiddleware (400/404/409/422/500)
 - OriginValidationMiddleware (validação Origin/Referer)
+- CorrelationIdMiddleware (rastreabilidade via X-Correlation-Id)
 - Swagger (apenas em desenvolvimento)
 - CORS (origem do frontend)
-- Rate Limiting (10 req/min payments, 3 req/min strict)
+- Rate Limiting por usuário (Token Bucket: 20 tokens/min)
 - JWT Authentication (HS256, issuer, audience, clock skew zero)
 - JwtUserMiddleware (extração de UserId do token)
-- MediatR pipeline: LoggingBehaviour → ValidationBehaviour → PerformanceBehaviour
+- MediatR pipeline: LoggingBehaviour → ValidationBehaviour → PerformanceBehaviour → TransactionBehaviour → OutboxBehavior → DomainEventDispatcherBehavior → CachingBehavior
 - Limite de payload: 1MB
+
+### Pipelines MediatR (Ordem de Execução)
+
+1. **LoggingBehaviour** — Log de início/fim de cada request
+2. **ValidationBehaviour** — Validação via FluentValidation
+3. **PerformanceBehaviour** — Alerta se request demorar >500ms
+4. **TransactionBehaviour** — Unit of Work com transação automática
+5. **OutboxBehavior** — Grava eventos no Outbox para publicação confiável
+6. **DomainEventDispatcherBehavior** — Despacha Domain Events do aggregate
+7. **CachingBehavior** — Cache InMemory para queries (30s TTL)
 
 ## Segurança
 
 - JWT validado com algoritmo explícito (apenas HS256)
 - Issuer e Audience lidos da configuração
 - ClockSkew = 0 (sem tolerância)
-- Rate limiting por endpoint (Payment: 10/min, Strict: 3/min)
+- Rate limiting por usuário (Token Bucket: 20 tokens/min, partitioned by userId)
 - CORS restrito ao frontend (origens configuráveis)
 - Validação de Origin/Referer em requisições POST/PUT/DELETE
 - Limite de payload de 1MB
@@ -203,20 +267,24 @@ curl -X DELETE http://localhost:5001/api/payments/<payment-id> \
 - Erros 500 genéricos em produção (sem detalhes)
 - Conexão PostgreSQL com SSL (sslmode=Require)
 - Pool de conexão limitado (max 10)
+- Correlation ID em todas as requisições para rastreabilidade
+- Outbox Pattern para garantir publicação confiável de eventos
 
 ## Testes
 
-O projeto possui **82 testes** cobrindo todas as camadas:
+O projeto possui **84 testes** cobrindo todas as camadas:
 
 | Categoria | Testes | Cobertura |
 |-----------|--------|-----------|
 | Domain (Money, Payment, PaymentLog) | 18 | Entidades, value objects, state machine |
-| Validators (ProcessPayment, CancelPayment) | 19 | Regras de validação FluentValidation |
-| Handlers (Process, Cancel, GetPayment) | 12 | CQRS handlers com mocks |
+| Validators (ProcessPayment, CancelPayment, RefundPayment) | 21 | Regras de validação FluentValidation |
+| Handlers (Process, Cancel, Get, List, Refund) | 14 | CQRS handlers com mocks |
 | Infrastructure (FakePaymentGateway) | 6 | Luhn, expiry, PIX, Boleto |
 | JwtValidator | 7 | Token válido, expirado, assinatura, claims |
 | ExceptionHandlingMiddleware | 6 | Mapeamento 400/404/409/422/500 |
 | Integration | 2 | Fluxo completo com InMemory DB |
+| Caching | 2 | Cache hit/miss |
+| Health Checks | 2 | PostgreSQL + RabbitMQ |
 
 ```bash
 # Executar todos os testes
@@ -229,12 +297,73 @@ dotnet test tests/Payment.UnitTests
 dotnet test --collect:"XPlat Code Coverage"
 ```
 
+## Arquitetura Aplicada
+
+### Fluxo de uma Requisição
+
+```
+HTTP Request
+    ↓
+CorrelationIdMiddleware (gera X-Correlation-Id)
+    ↓
+ExceptionHandlingMiddleware (catch global)
+    ↓
+OriginValidationMiddleware (valida Origin/Referer)
+    ↓
+JwtUserMiddleware (extrai userId do token)
+    ↓
+Rate Limiting (Token Bucket por userId)
+    ↓
+PaymentsController (valida Idempotency-Key)
+    ↓
+MediatR Pipeline:
+    1. LoggingBehaviour
+    2. ValidationBehaviour (FluentValidation)
+    3. PerformanceBehaviour (>500ms alert)
+    4. TransactionBehaviour (Unit of Work)
+    5. OutboxBehavior (publicação confiável)
+    6. DomainEventDispatcherBehavior
+    7. CachingBehavior (InMemory)
+    ↓
+Handler (Command/Query)
+    ↓
+Domain Entity + State Machine
+    ↓
+FakePaymentGateway (simula processamento)
+    ↓
+RabbitMQ (publica evento, com Polly retry + fallback NullMessageBus)
+```
+
+### Worker Service
+
+O Worker consome eventos do RabbitMQ de forma assíncrona:
+
+- **PaymentCompletedConsumer** — Processa eventos `PaymentCompleted` e atualiza status
+- **OutboxProcessor** — Background service que processa mensagens do Outbox e publica no RabbitMQ
+
+```bash
+# Executar o Worker
+dotnet run --project src/Payment.Worker
+```
+
 ## Integração
 
 Consulte [docs/integracao-frontend-backend.md](docs/integracao-frontend-backend.md) para instruções detalhadas de integração com:
 
 - **Frontend Next.js** — service de pagamento, tipos, rotas de checkout
 - **api-financial (Node.js)** — consumer RabbitMQ, atualização de plano, audit log
+
+## Status do Projeto
+
+**Todas as fases completas** — Payment Microservice pronto para produção.
+
+- [x] Fase 1: Scaffolding
+- [x] Fase 2: Domain
+- [x] Fase 3: Application (CQRS)
+- [x] Fase 4: Infrastructure
+- [x] Fase 5: API
+- [x] Fase 8: Testes
+- [x] Funcionalidades do Roadmap: Health Checks, ListPayments, Unit of Work, Correlation ID, Refund Flow, Outbox Pattern, Domain Events, Caching, Per-user Rate Limiting, Worker Service
 
 ## Licença
 
