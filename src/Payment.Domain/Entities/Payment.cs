@@ -1,10 +1,13 @@
 using Payment.Domain.Enums;
+using Payment.Domain.Events;
 using Payment.Domain.ValueObjects;
 
 namespace Payment.Domain.Entities;
 
 public sealed class Payment
 {
+    private readonly List<IDomainEvent> _domainEvents = new();
+
     public Guid Id { get; private set; }
     public Guid UserId { get; private set; }
     public PlanType PlanType { get; private set; }
@@ -19,7 +22,15 @@ public sealed class Payment
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
 
+    public IReadOnlyList<IDomainEvent> DomainEvents => _domainEvents.AsReadOnly();
+
     private Payment() { }
+
+    public void AddDomainEvent(IDomainEvent domainEvent)
+        => _domainEvents.Add(domainEvent);
+
+    public void ClearDomainEvents()
+        => _domainEvents.Clear();
 
     public static Payment CreateForTest(
         Guid? id = null,

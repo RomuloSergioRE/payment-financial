@@ -7,6 +7,7 @@ using Payment.Application.Common.Interfaces;
 using Payment.Application.Common.Models;
 using Payment.Domain.Entities;
 using Payment.Domain.Enums;
+using Payment.Domain.Events;
 using Payment.Domain.ValueObjects;
 using PaymentEntity = Payment.Domain.Entities.Payment;
 
@@ -93,6 +94,17 @@ public sealed class ProcessPaymentCommandHandler
             payment.MarkCompleted(result.GatewayPaymentId, result.RawResponse ?? "{}");
             _context.PaymentLogs.Add(new PaymentLog(
                 payment.Id, PaymentLog.EventTypes.Completed));
+
+            payment.AddDomainEvent(new PaymentCompletedDomainEvent
+            {
+                PaymentId = payment.Id,
+                UserId = payment.UserId,
+                PlanType = command.PlanType,
+                Amount = money.Amount,
+                Currency = money.Currency,
+                PaymentMethod = command.PaymentMethod,
+                PaidAt = payment.PaidAt!.Value
+            });
         }
         else
         {
@@ -100,6 +112,13 @@ public sealed class ProcessPaymentCommandHandler
             _context.PaymentLogs.Add(new PaymentLog(
                 payment.Id, PaymentLog.EventTypes.Failed,
                 new { error = result.GatewayMessage }));
+
+            payment.AddDomainEvent(new PaymentFailedDomainEvent
+            {
+                PaymentId = payment.Id,
+                UserId = payment.UserId,
+                ErrorMessage = result.GatewayMessage
+            });
         }
 
         await _context.SaveChangesAsync(cancellationToken);

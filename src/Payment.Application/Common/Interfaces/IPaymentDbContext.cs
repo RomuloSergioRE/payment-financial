@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using PaymentEntity = Payment.Domain.Entities.Payment;
 
@@ -10,5 +11,6 @@ public interface IPaymentDbContext
     DbSet<Payment.Domain.Entities.PaymentLog> PaymentLogs { get; }
     DbSet<Payment.Domain.Entities.OutboxMessage> OutboxMessages { get; }
     DatabaseFacade Database { get; }
+    ChangeTracker ChangeTracker { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
