@@ -5,6 +5,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 using Payment.Application.Common.Interfaces;
 using Payment.Infrastructure.Auth;
+using Payment.Infrastructure.Caching;
 using Payment.Infrastructure.HealthChecks;
 using Payment.Infrastructure.Messaging;
 using Payment.Infrastructure.PaymentGateway;
@@ -82,6 +83,10 @@ public static class DependencyInjection
 
         // JWT
         services.AddScoped<JwtValidator>();
+
+        // Caching
+        services.AddMemoryCache();
+        services.AddSingleton<ICacheService, InMemoryCacheService>();
 
         // Health Checks
         services.AddHealthChecks()

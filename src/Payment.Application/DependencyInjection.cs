@@ -19,6 +19,7 @@ public static class DependencyInjection
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(Common.Behaviours.PerformanceBehaviour<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(Common.Behaviours.OutboxBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(Common.Behaviours.DomainEventDispatcherBehavior<,>));
+        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(Common.Behaviours.CachingBehavior<,>));
 
         return services;
     }
