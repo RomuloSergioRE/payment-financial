@@ -62,13 +62,7 @@ try
     {
         options.RejectionStatusCode = 429;
 
-        var paymentConfig = builder.Configuration.GetSection("RateLimiting:Payment");
-        options.AddFixedWindowLimiter("Payment", opt =>
-        {
-            opt.PermitLimit = paymentConfig.GetValue<int>("PermitLimit", 10);
-            opt.Window = TimeSpan.FromMinutes(paymentConfig.GetValue<int>("WindowInMinutes", 1));
-            opt.QueueLimit = paymentConfig.GetValue<int>("QueueLimit", 2);
-        });
+        options.AddPolicy<string, Payment.Api.RateLimiting.UserRateLimiter>("UserPayment");
 
         var strictConfig = builder.Configuration.GetSection("RateLimiting:Strict");
         options.AddFixedWindowLimiter("Strict", opt =>

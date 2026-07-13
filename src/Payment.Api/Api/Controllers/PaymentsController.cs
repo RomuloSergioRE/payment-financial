@@ -20,7 +20,7 @@ public sealed class PaymentsController : ControllerBase
     public PaymentsController(ISender sender) => _sender = sender;
 
     [HttpPost]
-    [EnableRateLimiting("Payment")]
+    [EnableRateLimiting("UserPayment")]
     [ProducesResponseType(typeof(ProcessPaymentResponse), 200)]
     [ProducesResponseType(400)]
     [ProducesResponseType(401)]
