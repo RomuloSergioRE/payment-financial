@@ -21,6 +21,28 @@ public sealed class Payment
 
     private Payment() { }
 
+    public static Payment CreateForTest(
+        Guid? id = null,
+        Guid? userId = null,
+        PlanType planType = PlanType.Pro,
+        PaymentStatus status = PaymentStatus.Pending,
+        string? idempotencyKey = null)
+    {
+        var payment = new Payment
+        {
+            Id = id ?? Guid.NewGuid(),
+            UserId = userId ?? Guid.NewGuid(),
+            PlanType = planType,
+            Amount = new Money(29.90m, "BRL"),
+            Method = PaymentMethod.CreditCard,
+            Status = status,
+            IdempotencyKey = idempotencyKey ?? Guid.NewGuid().ToString(),
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        return payment;
+    }
+
     public Payment(Guid userId, PlanType planType, Money amount,
                    PaymentMethod method, string idempotencyKey)
     {
