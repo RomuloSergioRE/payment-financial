@@ -59,12 +59,18 @@ public sealed class Payment
 
     public void MarkProcessing()
     {
+        if (Status != PaymentStatus.Pending)
+            throw new Exceptions.PaymentException(
+                $"Cannot transition to Processing from '{Status}'.");
         Status = PaymentStatus.Processing;
         UpdatedAt = DateTime.UtcNow;
     }
 
     public void MarkCompleted(string gatewayPaymentId, string gatewayResponse)
     {
+        if (Status != PaymentStatus.Processing)
+            throw new Exceptions.PaymentException(
+                $"Cannot transition to Completed from '{Status}'.");
         Status = PaymentStatus.Completed;
         GatewayPaymentId = gatewayPaymentId;
         GatewayResponse = gatewayResponse;
@@ -72,14 +78,21 @@ public sealed class Payment
         UpdatedAt = DateTime.UtcNow;
     }
 
-    public void MarkFailed()
+    public void MarkFailed(string? errorMessage = null)
     {
+        if (Status != PaymentStatus.Processing)
+            throw new Exceptions.PaymentException(
+                $"Cannot transition to Failed from '{Status}'.");
         Status = PaymentStatus.Failed;
+        GatewayResponse = errorMessage;
         UpdatedAt = DateTime.UtcNow;
     }
 
     public void MarkRefunded()
     {
+        if (Status != PaymentStatus.Completed)
+            throw new Exceptions.PaymentException(
+                $"Cannot transition to Refunded from '{Status}'.");
         Status = PaymentStatus.Refunded;
         RefundedAt = DateTime.UtcNow;
         UpdatedAt = DateTime.UtcNow;
@@ -87,6 +100,9 @@ public sealed class Payment
 
     public void MarkCancelled()
     {
+        if (Status != PaymentStatus.Pending)
+            throw new Exceptions.PaymentException(
+                $"Cannot transition to Cancelled from '{Status}'.");
         Status = PaymentStatus.Cancelled;
         UpdatedAt = DateTime.UtcNow;
     }

@@ -23,12 +23,6 @@ try
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen();
 
-    builder.Services.AddDbContext<Payment.Infrastructure.Persistence.PaymentDbContext>((sp, options) =>
-    {
-        var connectionString = builder.Configuration.GetConnectionString("PaymentDatabase");
-        options.UseNpgsql(connectionString);
-    });
-
     builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         .AddJwtBearer(options =>
         {
@@ -88,12 +82,16 @@ try
     builder.Services.AddApplicationServices();
     builder.Services.AddInfrastructureServices(builder.Configuration);
 
-    builder.Services.AddControllers();
+    builder.Services.AddControllers(options =>
+    {
+        options.Filters.Add(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(1_048_576));
+    });
 
     var app = builder.Build();
 
     app.UseSerilogRequestLogging();
     app.UseMiddleware<ExceptionHandlingMiddleware>();
+    app.UseMiddleware<OriginValidationMiddleware>();
 
     if (app.Environment.IsDevelopment())
     {

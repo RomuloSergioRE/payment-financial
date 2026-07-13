@@ -28,10 +28,9 @@ public sealed class PerformanceBehaviour<TRequest, TResponse>
         if (timer.ElapsedMilliseconds > ThresholdMilliseconds)
         {
             _logger.LogWarning(
-                "Long running request: {Name} ({ElapsedMilliseconds}ms) {@Request}",
+                "Long running request: {Name} ({ElapsedMilliseconds}ms)",
                 typeof(TRequest).Name,
-                timer.ElapsedMilliseconds,
-                request);
+                timer.ElapsedMilliseconds);
         }
 
         return response;

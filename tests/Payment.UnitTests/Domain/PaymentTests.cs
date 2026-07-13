@@ -45,7 +45,7 @@ public class PaymentTests
     }
 
     [Fact]
-    public void MarkProcessing_SetsStatusToProcessing()
+    public void MarkProcessing_FromPending_SetsStatusToProcessing()
     {
         var payment = CreateValidPayment();
 
@@ -56,12 +56,25 @@ public class PaymentTests
     }
 
     [Fact]
-    public void MarkCompleted_SetsStatusAndGatewayFields()
+    public void MarkProcessing_FromProcessing_ThrowsPaymentException()
+    {
+        var payment = CreateValidPayment();
+        payment.MarkProcessing();
+
+        var act = () => payment.MarkProcessing();
+
+        act.Should().Throw<PaymentException>()
+            .WithMessage("*Cannot transition to Processing from 'Processing'*");
+    }
+
+    [Fact]
+    public void MarkCompleted_FromProcessing_SetsStatusAndGatewayFields()
     {
         var payment = CreateValidPayment();
         var gatewayId = "cc_abc123";
         var response = "{\"status\":\"approved\"}";
 
+        payment.MarkProcessing();
         payment.MarkCompleted(gatewayId, response);
 
         payment.Status.Should().Be(PaymentStatus.Completed);
@@ -72,10 +85,22 @@ public class PaymentTests
     }
 
     [Fact]
-    public void MarkFailed_SetsStatusToFailed()
+    public void MarkCompleted_FromPending_ThrowsPaymentException()
     {
         var payment = CreateValidPayment();
 
+        var act = () => payment.MarkCompleted("gw", "{}");
+
+        act.Should().Throw<PaymentException>()
+            .WithMessage("*Cannot transition to Completed from 'Pending'*");
+    }
+
+    [Fact]
+    public void MarkFailed_FromProcessing_SetsStatusToFailed()
+    {
+        var payment = CreateValidPayment();
+
+        payment.MarkProcessing();
         payment.MarkFailed();
 
         payment.Status.Should().Be(PaymentStatus.Failed);
@@ -83,10 +108,23 @@ public class PaymentTests
     }
 
     [Fact]
-    public void MarkRefunded_SetsStatusToRefunded()
+    public void MarkFailed_FromPending_ThrowsPaymentException()
     {
         var payment = CreateValidPayment();
 
+        var act = () => payment.MarkFailed();
+
+        act.Should().Throw<PaymentException>()
+            .WithMessage("*Cannot transition to Failed from 'Pending'*");
+    }
+
+    [Fact]
+    public void MarkRefunded_FromCompleted_SetsStatusToRefunded()
+    {
+        var payment = CreateValidPayment();
+
+        payment.MarkProcessing();
+        payment.MarkCompleted("gw_123", "{}");
         payment.MarkRefunded();
 
         payment.Status.Should().Be(PaymentStatus.Refunded);
@@ -95,7 +133,18 @@ public class PaymentTests
     }
 
     [Fact]
-    public void MarkCancelled_SetsStatusToCancelled()
+    public void MarkRefunded_FromPending_ThrowsPaymentException()
+    {
+        var payment = CreateValidPayment();
+
+        var act = () => payment.MarkRefunded();
+
+        act.Should().Throw<PaymentException>()
+            .WithMessage("*Cannot transition to Refunded from 'Pending'*");
+    }
+
+    [Fact]
+    public void MarkCancelled_FromPending_SetsStatusToCancelled()
     {
         var payment = CreateValidPayment();
 
@@ -103,6 +152,18 @@ public class PaymentTests
 
         payment.Status.Should().Be(PaymentStatus.Cancelled);
         payment.UpdatedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public void MarkCancelled_FromProcessing_ThrowsPaymentException()
+    {
+        var payment = CreateValidPayment();
+        payment.MarkProcessing();
+
+        var act = () => payment.MarkCancelled();
+
+        act.Should().Throw<PaymentException>()
+            .WithMessage("*Cannot transition to Cancelled from 'Processing'*");
     }
 
     [Fact]
@@ -121,5 +182,27 @@ public class PaymentTests
 
         payment.Method.Should().Be(PaymentMethod.Boleto);
         payment.Status.Should().Be(PaymentStatus.Pending);
+    }
+
+    [Fact]
+    public void FullLifecycle_PendingToCompleted()
+    {
+        var payment = CreateValidPayment();
+
+        payment.MarkProcessing();
+        payment.Status.Should().Be(PaymentStatus.Processing);
+
+        payment.MarkCompleted("gw_full", "{}");
+        payment.Status.Should().Be(PaymentStatus.Completed);
+        payment.PaidAt.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void FullLifecycle_PendingToCancelled()
+    {
+        var payment = CreateValidPayment();
+
+        payment.MarkCancelled();
+        payment.Status.Should().Be(PaymentStatus.Cancelled);
     }
 }

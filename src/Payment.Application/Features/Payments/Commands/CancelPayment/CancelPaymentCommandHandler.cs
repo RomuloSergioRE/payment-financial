@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Payment.Application.Common.Exceptions;
 using Payment.Application.Common.Interfaces;
+using Payment.Domain.Entities;
 using Payment.Domain.Enums;
 
 namespace Payment.Application.Features.Payments.Commands.CancelPayment;
@@ -37,8 +38,8 @@ public sealed class CancelPaymentCommandHandler
         if (payment.UserId != request.UserId)
         {
             _logger.LogWarning(
-                "User {UserId} attempted to cancel payment {PaymentId} belonging to {OwnerId}",
-                request.UserId, request.PaymentId, payment.UserId);
+                "Unauthorized cancel attempt for payment {PaymentId}",
+                request.PaymentId);
             throw new NotFoundException("Payment", request.PaymentId);
         }
 
@@ -52,8 +53,8 @@ public sealed class CancelPaymentCommandHandler
         }
 
         payment.MarkCancelled();
-        _context.PaymentLogs.Add(new Domain.Entities.PaymentLog(
-            payment.Id, "payment.cancelled"));
+        _context.PaymentLogs.Add(new PaymentLog(
+            payment.Id, PaymentLog.EventTypes.Cancelled));
 
         await _context.SaveChangesAsync(cancellationToken);
 

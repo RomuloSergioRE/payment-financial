@@ -30,32 +30,42 @@ public static class DependencyInjection
         var rabbitHost = configuration["RabbitMQ:Host"];
         if (!string.IsNullOrEmpty(rabbitHost))
         {
-            services.AddSingleton<IConnection>(sp =>
+            var useRabbit = false;
+            IConnection? connection = null;
+
+            try
             {
-                var logger = sp.GetRequiredService<ILoggerFactory>()
-                    .CreateLogger("Payment.Infrastructure.RabbitMQ");
-
-                try
+                var factory = new ConnectionFactory
                 {
-                    var factory = new ConnectionFactory
-                    {
-                        HostName = rabbitHost,
-                        Port = int.TryParse(configuration["RabbitMQ:Port"], out var port) ? port : 5672,
-                        UserName = configuration["RabbitMQ:Username"] ?? "guest",
-                        Password = configuration["RabbitMQ:Password"] ?? "guest",
-                        VirtualHost = configuration["RabbitMQ:VirtualHost"] ?? "/",
-                        RequestedConnectionTimeout = TimeSpan.FromSeconds(5),
-                    };
-                    return factory.CreateConnection();
-                }
-                catch (Exception ex)
-                {
-                    logger.LogWarning(ex, "Could not connect to RabbitMQ at {Host}. Message publishing will be unavailable.", rabbitHost);
-                    throw;
-                }
-            });
+                    HostName = rabbitHost,
+                    Port = int.TryParse(configuration["RabbitMQ:Port"], out var port) ? port : 5672,
+                    UserName = configuration["RabbitMQ:Username"] ?? "guest",
+                    Password = configuration["RabbitMQ:Password"] ?? "guest",
+                    VirtualHost = configuration["RabbitMQ:VirtualHost"] ?? "/",
+                    RequestedConnectionTimeout = TimeSpan.FromSeconds(5),
+                };
+                connection = factory.CreateConnection();
+                useRabbit = true;
+            }
+            catch (Exception ex)
+            {
+                var loggerFactory = services.BuildServiceProvider()
+                    .GetRequiredService<ILoggerFactory>();
+                var logger = loggerFactory.CreateLogger("Payment.Infrastructure.RabbitMQ");
+                logger.LogWarning(ex,
+                    "Could not connect to RabbitMQ at {Host}. Message publishing will be unavailable.",
+                    rabbitHost);
+            }
 
-            services.AddSingleton<IMessageBus, RabbitMqBus>();
+            if (useRabbit && connection is not null)
+            {
+                services.AddSingleton<IConnection>(connection);
+                services.AddSingleton<IMessageBus, RabbitMqBus>();
+            }
+            else
+            {
+                services.AddSingleton<IMessageBus, NullMessageBus>();
+            }
         }
         else
         {

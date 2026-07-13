@@ -28,9 +28,9 @@ public sealed class JwtValidator
             IssuerSigningKey = new SymmetricSecurityKey(
                 Encoding.UTF8.GetBytes(secret)),
             ValidateIssuer = true,
-            ValidIssuer = "zenyfin-api",
+            ValidIssuer = configuration["Jwt:Issuer"] ?? "zenyfin-api",
             ValidateAudience = true,
-            ValidAudience = "zenyfin-payment",
+            ValidAudience = configuration["Jwt:Audience"] ?? "zenyfin-payment",
             ValidateLifetime = true,
             ClockSkew = TimeSpan.Zero
         };

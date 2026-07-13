@@ -31,7 +31,7 @@ public static class TestDbContextFactory
             idempotencyKey ?? Guid.NewGuid().ToString());
 
         context.Payments.Add(payment);
-        context.PaymentLogs.Add(new PaymentLog(payment.Id, "payment.created"));
+        context.PaymentLogs.Add(new PaymentLog(payment.Id, PaymentLog.EventTypes.Created));
         await context.SaveChangesAsync();
         return payment;
     }
@@ -52,9 +52,9 @@ public static class TestDbContextFactory
         payment.MarkCompleted("gw_test", "{\"status\":\"approved\"}");
 
         context.Payments.Add(payment);
-        context.PaymentLogs.Add(new PaymentLog(payment.Id, "payment.created"));
-        context.PaymentLogs.Add(new PaymentLog(payment.Id, "payment.processing"));
-        context.PaymentLogs.Add(new PaymentLog(payment.Id, "payment.completed"));
+        context.PaymentLogs.Add(new PaymentLog(payment.Id, PaymentLog.EventTypes.Created));
+        context.PaymentLogs.Add(new PaymentLog(payment.Id, PaymentLog.EventTypes.Processing));
+        context.PaymentLogs.Add(new PaymentLog(payment.Id, PaymentLog.EventTypes.Completed));
         await context.SaveChangesAsync();
         return payment;
     }

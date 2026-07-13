@@ -103,5 +103,16 @@ public sealed class PaymentConfiguration : IEntityTypeConfiguration<Domain.Entit
 
         builder.HasIndex(p => p.CreatedAt)
             .HasDatabaseName("idx_payments_created_at");
+
+        builder.ToTable("payments", t =>
+        {
+            t.HasCheckConstraint("ck_payments_amount", "amount > 0");
+            t.HasCheckConstraint("ck_payments_status",
+                "status IN ('pending','processing','completed','failed','refunded','cancelled')");
+            t.HasCheckConstraint("ck_payments_method",
+                "payment_method IN ('credit_card','pix','boleto')");
+            t.HasCheckConstraint("ck_payments_plan",
+                "plan_type IN ('pro','enterprise')");
+        });
     }
 }

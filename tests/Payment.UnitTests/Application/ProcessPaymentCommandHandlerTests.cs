@@ -127,6 +127,91 @@ public class ProcessPaymentCommandHandlerTests : IDisposable
         _gatewayMock.Verify(g => g.ProcessPixAsync(It.IsAny<decimal>()), Times.Once);
     }
 
+    [Fact]
+    public async Task BoletoPayment_Success()
+    {
+        var command = ValidCommand("boleto-key") with
+        {
+            PaymentMethod = "boleto",
+            CardNumber = null,
+            CardCvv = null,
+            CardExpiryMonth = null,
+            CardExpiryYear = null,
+            CardHolderName = null
+        };
+
+        _gatewayMock.Setup(g => g.ProcessBoletoAsync(It.IsAny<decimal>()))
+            .ReturnsAsync(new PaymentResult(true, "boleto_123", "Boleto generated", "{}"));
+
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        result.Status.Should().Be("completed");
+        _gatewayMock.Verify(g => g.ProcessBoletoAsync(It.IsAny<decimal>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task GatewayReturnsFailure_MarksFailedAndReturnsError()
+    {
+        var command = ValidCommand("gw-fail-result-key");
+
+        _gatewayMock.Setup(g => g.ProcessCreditCardAsync(
+                It.IsAny<decimal>(), It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>()))
+            .ReturnsAsync(new PaymentResult(false, "", "Card declined by issuer", null));
+
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        result.Status.Should().Be("failed");
+        result.ErrorMessage.Should().Be("Card declined by issuer");
+
+        var savedPayment = _context.Payments
+            .First(p => p.IdempotencyKey == "gw-fail-result-key");
+        savedPayment.Status.Should().Be(PaymentStatus.Failed);
+    }
+
+    [Fact]
+    public async Task SuccessfulPayment_CreatesPaymentLogEntries()
+    {
+        var command = ValidCommand("log-verify-key");
+
+        _gatewayMock.Setup(g => g.ProcessCreditCardAsync(
+                It.IsAny<decimal>(), It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>()))
+            .ReturnsAsync(new PaymentResult(true, "gw_log", "Approved", "{}"));
+
+        await _handler.Handle(command, CancellationToken.None);
+
+        var payment = _context.Payments
+            .First(p => p.IdempotencyKey == "log-verify-key");
+        var logs = _context.PaymentLogs
+            .Where(l => l.PaymentId == payment.Id)
+            .Select(l => l.EventType)
+            .ToList();
+
+        logs.Should().Contain("payment.created");
+        logs.Should().Contain("payment.processing");
+        logs.Should().Contain("payment.completed");
+        logs.Should().NotContain("payment.failed");
+    }
+
+    [Fact]
+    public async Task FailedPayment_DoesNotPublishEvent()
+    {
+        var command = ValidCommand("no-event-key");
+
+        _gatewayMock.Setup(g => g.ProcessCreditCardAsync(
+                It.IsAny<decimal>(), It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>()))
+            .ThrowsAsync(new InvalidOperationException("Gateway error"));
+
+        await _handler.Handle(command, CancellationToken.None);
+
+        _busMock.Verify(b => b.PublishAsync(
+            It.IsAny<PaymentCompletedEvent>(),
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     public void Dispose()
     {
         _context.Dispose();

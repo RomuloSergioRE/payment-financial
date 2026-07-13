@@ -11,7 +11,7 @@ public sealed class GetPlanPricesQueryHandler
     {
         var plans = new List<GetPlanPricesResponse>
         {
-            new("pro", "Pro", 29.00m, "BRL"),
+            new("pro", "Pro", 29.90m, "BRL"),
             new("enterprise", "Enterprise", 99.00m, "BRL")
         };
 

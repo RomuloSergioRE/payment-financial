@@ -62,10 +62,10 @@ public sealed class ProcessPaymentCommandHandler
             command.UserId, planType, money, method, command.IdempotencyKey);
 
         _context.Payments.Add(payment);
-        _context.PaymentLogs.Add(new PaymentLog(payment.Id, "payment.created"));
+        _context.PaymentLogs.Add(new PaymentLog(payment.Id, PaymentLog.EventTypes.Created));
 
         payment.MarkProcessing();
-        _context.PaymentLogs.Add(new PaymentLog(payment.Id, "payment.processing"));
+        _context.PaymentLogs.Add(new PaymentLog(payment.Id, PaymentLog.EventTypes.Processing));
 
         Common.Models.PaymentResult result;
         try
@@ -85,9 +85,9 @@ public sealed class ProcessPaymentCommandHandler
         {
             payment.MarkFailed();
             _context.PaymentLogs.Add(new PaymentLog(
-                payment.Id, "payment.failed", new { error = ex.Message }));
-            await _context.SaveChangesAsync(cancellationToken);
+                payment.Id, PaymentLog.EventTypes.Failed, new { error = ex.Message }));
             _logger.LogError(ex, "Payment failed: {PaymentId}", payment.Id);
+            await _context.SaveChangesAsync(cancellationToken);
             return new ProcessPaymentResponse(payment.Id, "failed", ex.Message);
         }
 
@@ -95,7 +95,9 @@ public sealed class ProcessPaymentCommandHandler
         {
             payment.MarkCompleted(result.GatewayPaymentId, result.RawResponse ?? "{}");
             _context.PaymentLogs.Add(new PaymentLog(
-                payment.Id, "payment.completed"));
+                payment.Id, PaymentLog.EventTypes.Completed));
+
+            await _context.SaveChangesAsync(cancellationToken);
 
             var paymentEvent = new PaymentCompletedEvent(
                 EventId: Guid.NewGuid().ToString(),
@@ -110,20 +112,24 @@ public sealed class ProcessPaymentCommandHandler
         }
         else
         {
-            payment.MarkFailed();
+            payment.MarkFailed(result.GatewayMessage);
             _context.PaymentLogs.Add(new PaymentLog(
-                payment.Id, "payment.failed",
+                payment.Id, PaymentLog.EventTypes.Failed,
                 new { error = result.GatewayMessage }));
-        }
 
-        await _context.SaveChangesAsync(cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
+        }
 
         return MapToResponse(payment);
     }
 
     private static ProcessPaymentResponse MapToResponse(PaymentEntity payment)
     {
+        var errorMessage = payment.Status == PaymentStatus.Failed
+            ? payment.GatewayResponse
+            : null;
+
         return new ProcessPaymentResponse(
-            payment.Id, payment.Status.ToString().ToLowerInvariant(), null);
+            payment.Id, payment.Status.ToString().ToLowerInvariant(), errorMessage);
     }
 }
