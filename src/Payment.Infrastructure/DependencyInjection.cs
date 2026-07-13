@@ -1,9 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 using Payment.Application.Common.Interfaces;
 using Payment.Infrastructure.Auth;
+using Payment.Infrastructure.HealthChecks;
 using Payment.Infrastructure.Messaging;
 using Payment.Infrastructure.PaymentGateway;
 using Payment.Infrastructure.Persistence;
@@ -27,11 +29,12 @@ public static class DependencyInjection
             sp.GetRequiredService<PaymentDbContext>());
 
         // RabbitMQ (optional - gracefully handles unavailable broker)
+        var connectionHolder = new RabbitMqConnectionHolder();
+
         var rabbitHost = configuration["RabbitMQ:Host"];
         if (!string.IsNullOrEmpty(rabbitHost))
         {
             var useRabbit = false;
-            IConnection? connection = null;
 
             try
             {
@@ -44,7 +47,7 @@ public static class DependencyInjection
                     VirtualHost = configuration["RabbitMQ:VirtualHost"] ?? "/",
                     RequestedConnectionTimeout = TimeSpan.FromSeconds(5),
                 };
-                connection = factory.CreateConnection();
+                connectionHolder.Connection = factory.CreateConnection();
                 useRabbit = true;
             }
             catch (Exception ex)
@@ -57,9 +60,9 @@ public static class DependencyInjection
                     rabbitHost);
             }
 
-            if (useRabbit && connection is not null)
+            if (useRabbit && connectionHolder.Connection is not null)
             {
-                services.AddSingleton<IConnection>(connection);
+                services.AddSingleton<IConnection>(connectionHolder.Connection);
                 services.AddSingleton<IMessageBus, RabbitMqBus>();
             }
             else
@@ -72,14 +75,30 @@ public static class DependencyInjection
             services.AddSingleton<IMessageBus, NullMessageBus>();
         }
 
+        services.AddSingleton(connectionHolder);
+
         // Payment Gateway
         services.AddScoped<IPaymentGateway, FakePaymentGateway>();
 
         // JWT
         services.AddScoped<JwtValidator>();
 
+        // Health Checks
+        services.AddHealthChecks()
+            .AddCheck<PostgresHealthCheck>("postgresql",
+                failureStatus: HealthStatus.Unhealthy,
+                tags: new[] { "ready" })
+            .AddCheck<RabbitMqHealthCheck>("rabbitmq",
+                failureStatus: HealthStatus.Degraded,
+                tags: new[] { "ready" });
+
         return services;
     }
+}
+
+public sealed class RabbitMqConnectionHolder
+{
+    public IConnection? Connection { get; internal set; }
 }
 
 public sealed class NullMessageBus : IMessageBus
