@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Payment.Application.Features.Payments.Commands.CancelPayment;
 using Payment.Application.Features.Payments.Commands.ProcessPayment;
 using Payment.Application.Features.Payments.Queries.GetPayment;
+using Payment.Application.Features.Payments.Queries.ListPayments;
 
 namespace Payment.Api.Controllers;
 
@@ -64,6 +65,24 @@ public sealed class PaymentsController : ControllerBase
             return Unauthorized(new { error = "Invalid token" });
 
         var query = new GetPaymentQuery(id, userId.Value);
+        var result = await _sender.Send(query, cancellationToken);
+        return Ok(result);
+    }
+
+    [HttpGet]
+    [ProducesResponseType(typeof(ListPaymentsResponse), 200)]
+    [ProducesResponseType(400)]
+    public async Task<IActionResult> ListPayments(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10,
+        [FromQuery] string? status = null,
+        CancellationToken cancellationToken = default)
+    {
+        var userId = HttpContext.Items["UserId"] as Guid?;
+        if (userId is null)
+            return Unauthorized(new { error = "Invalid token" });
+
+        var query = new ListPaymentsQuery(userId.Value, page, pageSize, status);
         var result = await _sender.Send(query, cancellationToken);
         return Ok(result);
     }
