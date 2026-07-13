@@ -9,6 +9,9 @@ Microserviço de pagamentos do ecossistema zenyFin. Processa upgrades de plano (
 - Mensageria assíncrona com RabbitMQ (event-driven)
 - Validação JWT rigorosa (HS256, issuer, audience, clock skew zero)
 - Rate Limiting, Idempotência e CORS configurados
+- Validação de Origin/Referer em middleware de segurança
+- Limite de payload de 1MB em todas as controllers
+- State machine com guardas de transição de estado no domínio
 - Logs estruturados com Serilog (sem dados sensíveis)
 - Retry com Polly e Dead Letter Queue
 
@@ -25,8 +28,9 @@ Microserviço de pagamentos do ecossistema zenyFin. Processa upgrades de plano (
 | Mensageria | RabbitMQ.Client 6 |
 | Gateway Fake | Bogus 35 |
 | JWT | System.IdentityModel.Tokens.Jwt 7 |
-| Logs | Serilog 3 |
+| Logs | Serilog 4 + Seq |
 | Retry | Polly 8 |
+| Testes | xUnit + Moq + FluentAssertions |
 | Documentação | Swagger / Swashbuckle 6 |
 
 ## Estrutura do Projeto
@@ -113,13 +117,14 @@ ASPNETCORE_URLS=http://localhost:5001
 
 ## Endpoints da API
 
-| Método | Rota | Descrição | Autenticação |
-|--------|------|-----------|-------------|
-| GET | `/health` | Health check | Não |
-| POST | `/api/payments` | Processar pagamento | JWT Bearer |
-| GET | `/api/payments/{id}` | Consultar pagamento | JWT Bearer |
+| Método | Rota | Descrição | Autenticação | Rate Limit |
+|--------|------|-----------|-------------|------------|
+| GET | `/health` | Health check | Não | — |
+| POST | `/api/payments` | Processar pagamento | JWT Bearer | 10 req/min |
+| GET | `/api/payments/{id}` | Consultar pagamento | JWT Bearer | — |
+| DELETE | `/api/payments/{id}` | Cancelar pagamento | JWT Bearer | 3 req/min |
 
-### Exemplo de requisição (pagamento)
+### Exemplo de requisição (cartão de crédito)
 
 ```bash
 curl -X POST http://localhost:5001/api/payments \
@@ -128,7 +133,7 @@ curl -X POST http://localhost:5001/api/payments \
   -H "Content-Type: application/json" \
   -d '{
     "planType": "pro",
-    "amount": 29.00,
+    "amount": 29.90,
     "currency": "BRL",
     "paymentMethod": "credit_card",
     "cardNumber": "4111111111111111",
@@ -139,36 +144,90 @@ curl -X POST http://localhost:5001/api/payments \
   }'
 ```
 
+### Exemplo de requisição (PIX)
+
+```bash
+curl -X POST http://localhost:5001/api/payments \
+  -H "Authorization: Bearer <token>" \
+  -H "Idempotency-Key: payment_user_123_1710000001" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "planType": "pro",
+    "amount": 29.90,
+    "currency": "BRL",
+    "paymentMethod": "pix"
+  }'
+```
+
+### Exemplo de requisição (cancelamento)
+
+```bash
+curl -X DELETE http://localhost:5001/api/payments/<payment-id> \
+  -H "Authorization: Bearer <token>"
+```
+
 ## Cartões de Teste
 
 | Número | Bandeira | CVV | Validade | Resultado |
 |--------|----------|-----|----------|-----------|
-| `4111 1111 1111 1111` | Visa | `123` | 12/2028 | Aprovado |
-| `5555 5555 5555 4444` | Mastercard | `123` | 12/2028 | Aprovado |
-| `3782 822463 10005` | Amex | `1234` | 12/2028 | Aprovado |
-| `4000 0000 0000 0002` | Qualquer | `123` | 12/2028 | Declinado |
+| `4111 1111 1111 1111` | Visa | `123` | 12/2028 | Aprovado (90%) |
+| `5555 5555 5555 4444` | Mastercard | `123` | 12/2028 | Aprovado (90%) |
+| `3782 822463 10005` | Amex | `1234` | 12/2028 | Aprovado (90%) |
+| `4000 0000 0000 0002` | Qualquer | `123` | 12/2028 | Declinado (Luhn inválido) |
 
 ## Pipelines Configurados (Program.cs)
 
 - Serilog (bootstrap + request logging)
+- ExceptionHandlingMiddleware (400/404/409/422/500)
+- OriginValidationMiddleware (validação Origin/Referer)
 - Swagger (apenas em desenvolvimento)
-- EF Core + PostgreSQL
-- JWT Authentication (HS256, issuer, audience, clock skew zero)
 - CORS (origem do frontend)
 - Rate Limiting (10 req/min payments, 3 req/min strict)
-- MediatR + ValidationBehaviour + LoggingBehaviour
-- FluentValidation (validação automática)
+- JWT Authentication (HS256, issuer, audience, clock skew zero)
+- JwtUserMiddleware (extração de UserId do token)
+- MediatR pipeline: LoggingBehaviour → ValidationBehaviour → PerformanceBehaviour
+- Limite de payload: 1MB
 
 ## Segurança
 
 - JWT validado com algoritmo explícito (apenas HS256)
-- Issuer e Audience validados
+- Issuer e Audience lidos da configuração
 - ClockSkew = 0 (sem tolerância)
-- Rate limiting por endpoint
-- CORS restrito ao frontend
-- Idempotency-Key obrigatório
+- Rate limiting por endpoint (Payment: 10/min, Strict: 3/min)
+- CORS restrito ao frontend (origens configuráveis)
+- Validação de Origin/Referer em requisições POST/PUT/DELETE
+- Limite de payload de 1MB
+- Idempotency-Key obrigatório (único no banco de dados)
+- State machine com guardas (transições inválidas lançam exceção)
 - Logs sem dados sensíveis (nunca loga card number, CVV)
-- Erros 500 genéricos em produção
+- Erros 500 genéricos em produção (sem detalhes)
+- Conexão PostgreSQL com SSL (sslmode=Require)
+- Pool de conexão limitado (max 10)
+
+## Testes
+
+O projeto possui **82 testes** cobrindo todas as camadas:
+
+| Categoria | Testes | Cobertura |
+|-----------|--------|-----------|
+| Domain (Money, Payment, PaymentLog) | 18 | Entidades, value objects, state machine |
+| Validators (ProcessPayment, CancelPayment) | 19 | Regras de validação FluentValidation |
+| Handlers (Process, Cancel, GetPayment) | 12 | CQRS handlers com mocks |
+| Infrastructure (FakePaymentGateway) | 6 | Luhn, expiry, PIX, Boleto |
+| JwtValidator | 7 | Token válido, expirado, assinatura, claims |
+| ExceptionHandlingMiddleware | 6 | Mapeamento 400/404/409/422/500 |
+| Integration | 2 | Fluxo completo com InMemory DB |
+
+```bash
+# Executar todos os testes
+dotnet test
+
+# Executar apenas testes unitários
+dotnet test tests/Payment.UnitTests
+
+# Executar com cobertura
+dotnet test --collect:"XPlat Code Coverage"
+```
 
 ## Integração
 
