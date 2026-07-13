@@ -11,6 +11,7 @@ public sealed class PaymentLog
         public const string Completed = "payment.completed";
         public const string Failed = "payment.failed";
         public const string Cancelled = "payment.cancelled";
+        public const string Refunded = "payment.refunded";
     }
 
     public Guid Id { get; private set; }

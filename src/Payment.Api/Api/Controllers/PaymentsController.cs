@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Payment.Application.Features.Payments.Commands.CancelPayment;
 using Payment.Application.Features.Payments.Commands.ProcessPayment;
+using Payment.Application.Features.Payments.Commands.RefundPayment;
 using Payment.Application.Features.Payments.Queries.GetPayment;
 using Payment.Application.Features.Payments.Queries.ListPayments;
 
@@ -104,6 +105,26 @@ public sealed class PaymentsController : ControllerBase
         var result = await _sender.Send(command, cancellationToken);
         return Ok(result);
     }
+
+    [HttpPost("{id:guid}/refund")]
+    [EnableRateLimiting("Strict")]
+    [ProducesResponseType(typeof(RefundPaymentResponse), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(404)]
+    [ProducesResponseType(422)]
+    public async Task<IActionResult> RefundPayment(
+        Guid id,
+        [FromBody] RefundPaymentRequestDto? request = null,
+        CancellationToken cancellationToken = default)
+    {
+        var userId = HttpContext.Items["UserId"] as Guid?;
+        if (userId is null)
+            return Unauthorized(new { error = "Invalid token" });
+
+        var command = new RefundPaymentCommand(id, userId.Value, request?.Reason);
+        var result = await _sender.Send(command, cancellationToken);
+        return Ok(result);
+    }
 }
 
 public sealed record ProcessPaymentRequestDto(
@@ -116,3 +137,6 @@ public sealed record ProcessPaymentRequestDto(
     int? CardExpiryMonth,
     int? CardExpiryYear,
     string? CardHolderName);
+
+public sealed record RefundPaymentRequestDto(
+    string? Reason = null);

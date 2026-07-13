@@ -11,4 +11,6 @@ public interface IPaymentGateway
     Task<PaymentResult> ProcessPixAsync(decimal amount);
 
     Task<PaymentResult> ProcessBoletoAsync(decimal amount);
+
+    Task<PaymentResult> RefundAsync(decimal amount, string gatewayPaymentId);
 }

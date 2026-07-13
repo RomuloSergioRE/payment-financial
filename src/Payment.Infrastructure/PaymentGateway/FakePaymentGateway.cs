@@ -88,6 +88,25 @@ public sealed class FakePaymentGateway : IPaymentGateway
             true, gatewayId, "Boleto generated", raw));
     }
 
+    public async Task<PaymentResult> RefundAsync(decimal amount, string gatewayPaymentId)
+    {
+        await Task.Delay(_random.Next(200, 800));
+
+        var refundId = $"refund_{Guid.NewGuid():N}";
+        _logger.LogInformation("Refund processed: {RefundId} for gateway payment: {GatewayPaymentId}",
+            refundId, gatewayPaymentId);
+
+        var raw = JsonSerializer.Serialize(new
+        {
+            id = refundId,
+            original_payment = gatewayPaymentId,
+            status = "refunded",
+            amount
+        });
+
+        return new PaymentResult(true, refundId, "Refund processed", raw);
+    }
+
     private static bool LuhnCheck(string cardNumber)
     {
         var digits = cardNumber.Where(char.IsDigit).Select(c => int.Parse(c.ToString())).ToArray();
