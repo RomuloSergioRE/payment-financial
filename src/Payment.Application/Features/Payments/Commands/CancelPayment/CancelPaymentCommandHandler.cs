@@ -8,6 +8,8 @@ using Payment.Domain.Enums;
 
 namespace Payment.Application.Features.Payments.Commands.CancelPayment;
 
+// Handles the CancelPaymentCommand by validating ownership and status,
+// then transitioning the payment to Cancelled state.
 public sealed class CancelPaymentCommandHandler
     : IRequestHandler<CancelPaymentCommand, CancelPaymentResponse>
 {
@@ -22,10 +24,12 @@ public sealed class CancelPaymentCommandHandler
         _logger = logger;
     }
 
+    // Cancels a payment: verifies ownership, checks status, and transitions to Cancelled.
     public async Task<CancelPaymentResponse> Handle(
         CancelPaymentCommand request,
         CancellationToken cancellationToken)
     {
+        // PASSO 1: Buscar o pagamento pelo ID.
         var payment = await _context.Payments
             .FirstOrDefaultAsync(p => p.Id == request.PaymentId, cancellationToken);
 
@@ -35,6 +39,7 @@ public sealed class CancelPaymentCommandHandler
             throw new NotFoundException("Payment", request.PaymentId);
         }
 
+        // PASSO 2: Verificar propriedade — usuário só pode cancelar seus próprios pagamentos.
         if (payment.UserId != request.UserId)
         {
             _logger.LogWarning(
@@ -43,6 +48,7 @@ public sealed class CancelPaymentCommandHandler
             throw new NotFoundException("Payment", request.PaymentId);
         }
 
+        // PASSO 3: Verificar se o pagamento está pendente (único status cancelável).
         if (payment.Status != PaymentStatus.Pending)
         {
             _logger.LogWarning(
@@ -52,11 +58,10 @@ public sealed class CancelPaymentCommandHandler
                 $"Cannot cancel payment with status '{payment.Status}'. Only pending payments can be cancelled.");
         }
 
+        // PASSO 4: Transicionar para Cancelled e registrar log.
         payment.MarkCancelled();
         _context.PaymentLogs.Add(new PaymentLog(
             payment.Id, PaymentLog.EventTypes.Cancelled));
-
-        await _context.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(
             "Payment {PaymentId} cancelled by user {UserId}",

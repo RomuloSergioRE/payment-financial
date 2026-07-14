@@ -4,6 +4,8 @@ using Payment.Domain.Entities;
 
 namespace Payment.Infrastructure.Persistence.Configurations;
 
+// Entity Framework configuration for the PaymentLog entity.
+// Maps event-sourcing style logs linked to a Payment via foreign key with cascade delete.
 public sealed class PaymentLogConfiguration : IEntityTypeConfiguration<PaymentLog>
 {
     public void Configure(EntityTypeBuilder<PaymentLog> builder)
@@ -19,6 +21,7 @@ public sealed class PaymentLogConfiguration : IEntityTypeConfiguration<PaymentLo
             .HasColumnName("payment_id")
             .IsRequired();
 
+        // Cascade delete ensures logs are removed when the parent payment is deleted
         builder.HasOne<Domain.Entities.Payment>()
             .WithMany()
             .HasForeignKey(l => l.PaymentId)

@@ -4,6 +4,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace Payment.Api.Controllers;
 
+// Health check endpoints for liveness and readiness probes.
 [ApiController]
 [Route("health")]
 public sealed class HealthController : ControllerBase
@@ -13,6 +14,7 @@ public sealed class HealthController : ControllerBase
     public HealthController(HealthCheckService healthCheckService)
         => _healthCheckService = healthCheckService;
 
+    // Runs all registered health checks and returns detailed status per dependency.
     [HttpGet]
     [AllowAnonymous]
     public async Task<IActionResult> Get()
@@ -35,6 +37,7 @@ public sealed class HealthController : ControllerBase
         });
     }
 
+    // Lightweight liveness probe that always returns 200 if the process is running.
     [HttpGet("live")]
     [AllowAnonymous]
     public IActionResult Live()

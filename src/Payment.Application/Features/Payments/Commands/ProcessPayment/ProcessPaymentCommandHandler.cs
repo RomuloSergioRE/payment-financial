@@ -13,6 +13,8 @@ using PaymentEntity = Payment.Domain.Entities.Payment;
 
 namespace Payment.Application.Features.Payments.Commands.ProcessPayment;
 
+// Handles the ProcessPaymentCommand by validating idempotency, creating a payment entity,
+// processing through the gateway, and dispatching domain events on completion or failure.
 public sealed class ProcessPaymentCommandHandler
     : IRequestHandler<ProcessPaymentCommand, ProcessPaymentResponse>
 {
@@ -30,10 +32,12 @@ public sealed class ProcessPaymentCommandHandler
         _logger = logger;
     }
 
+    // Processes a payment: checks idempotency, creates entity, calls gateway, and raises domain events.
     public async Task<ProcessPaymentResponse> Handle(
         ProcessPaymentCommand command,
         CancellationToken cancellationToken)
     {
+        // PASSO 1: Verificar idempotência — rejeitar se já existir pagamento com a mesma chave.
         var existing = await _context.Payments
             .FirstOrDefaultAsync(p => p.IdempotencyKey == command.IdempotencyKey,
                                  cancellationToken);
@@ -46,6 +50,7 @@ public sealed class ProcessPaymentCommandHandler
             throw new DuplicatePaymentException(command.IdempotencyKey);
         }
 
+        // PASSO 2: Mapear DTOs primitivos para value objects e enums de domínio.
         var planType = command.PlanType == "pro" ? PlanType.Pro : PlanType.Enterprise;
         var money = new Money(command.Amount, command.Currency);
         var method = command.PaymentMethod switch
@@ -59,12 +64,15 @@ public sealed class ProcessPaymentCommandHandler
         var payment = new PaymentEntity(
             command.UserId, planType, money, method, command.IdempotencyKey);
 
+        // PASSO 3: Persistir a entidade de pagamento e o log de criação.
         _context.Payments.Add(payment);
         _context.PaymentLogs.Add(new PaymentLog(payment.Id, PaymentLog.EventTypes.Created));
 
+        // PASSO 4: Transicionar para o status Processing e registrar log.
         payment.MarkProcessing();
         _context.PaymentLogs.Add(new PaymentLog(payment.Id, PaymentLog.EventTypes.Processing));
 
+        // PASSO 5: Delegar ao gateway de pagamento conforme o método escolhido.
         Common.Models.PaymentResult result;
         try
         {
@@ -85,10 +93,10 @@ public sealed class ProcessPaymentCommandHandler
             _context.PaymentLogs.Add(new PaymentLog(
                 payment.Id, PaymentLog.EventTypes.Failed, new { error = ex.Message }));
             _logger.LogError(ex, "Payment failed: {PaymentId}", payment.Id);
-            await _context.SaveChangesAsync(cancellationToken);
             return new ProcessPaymentResponse(payment.Id, "failed", ex.Message);
         }
 
+        // PASSO 6: Atualizar status conforme resultado do gateway e disparar evento de domínio.
         if (result.Success)
         {
             payment.MarkCompleted(result.GatewayPaymentId, result.RawResponse ?? "{}");
@@ -121,11 +129,10 @@ public sealed class ProcessPaymentCommandHandler
             });
         }
 
-        await _context.SaveChangesAsync(cancellationToken);
-
         return MapToResponse(payment);
     }
 
+    // Maps the Payment entity to a ProcessPaymentResponse DTO.
     private static ProcessPaymentResponse MapToResponse(PaymentEntity payment)
     {
         var errorMessage = payment.Status == PaymentStatus.Failed

@@ -1,5 +1,6 @@
 namespace Payment.Application.Features.Payments.Queries.GetPayment;
 
+// Response DTO containing the full details of a single payment.
 public sealed record GetPaymentResponse(
     Guid PaymentId,
     Guid UserId,

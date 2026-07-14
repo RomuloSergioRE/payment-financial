@@ -4,6 +4,8 @@ using Payment.Domain.ValueObjects;
 
 namespace Payment.Domain.Entities;
 
+// Represents a financial transaction within the system, enforcing valid state transitions
+// and raising domain events for each lifecycle change.
 public sealed class Payment
 {
     private readonly List<IDomainEvent> _domainEvents = new();
@@ -26,12 +28,15 @@ public sealed class Payment
 
     private Payment() { }
 
+    // Enqueue a domain event to be dispatched after the transaction is committed.
     public void AddDomainEvent(IDomainEvent domainEvent)
         => _domainEvents.Add(domainEvent);
 
+    // Remove all pending domain events. Called after they have been dispatched.
     public void ClearDomainEvents()
         => _domainEvents.Clear();
 
+    // Factory method for unit tests only. Creates a fully formed Payment with default values.
     public static Payment CreateForTest(
         Guid? id = null,
         Guid? userId = null,
@@ -54,6 +59,7 @@ public sealed class Payment
         return payment;
     }
 
+    // Initialize a new payment in Pending status with the given parameters.
     public Payment(Guid userId, PlanType planType, Money amount,
                    PaymentMethod method, string idempotencyKey)
     {
@@ -68,6 +74,8 @@ public sealed class Payment
         UpdatedAt = DateTime.UtcNow;
     }
 
+    // Transition from Pending to Processing when the gateway starts processing.
+    // Throws PaymentException if current status is not Pending.
     public void MarkProcessing()
     {
         if (Status != PaymentStatus.Pending)
@@ -77,6 +85,8 @@ public sealed class Payment
         UpdatedAt = DateTime.UtcNow;
     }
 
+    // Transition from Processing to Completed after successful gateway confirmation.
+    // Throws PaymentException if current status is not Processing.
     public void MarkCompleted(string gatewayPaymentId, string gatewayResponse)
     {
         if (Status != PaymentStatus.Processing)
@@ -89,6 +99,8 @@ public sealed class Payment
         UpdatedAt = DateTime.UtcNow;
     }
 
+    // Transition from Processing to Failed when the gateway rejects the payment.
+    // Throws PaymentException if current status is not Processing.
     public void MarkFailed(string? errorMessage = null)
     {
         if (Status != PaymentStatus.Processing)
@@ -99,6 +111,8 @@ public sealed class Payment
         UpdatedAt = DateTime.UtcNow;
     }
 
+    // Transition from Completed to Refunded after the payment has been reimbursed.
+    // Throws PaymentException if current status is not Completed.
     public void MarkRefunded()
     {
         if (Status != PaymentStatus.Completed)
@@ -109,6 +123,8 @@ public sealed class Payment
         UpdatedAt = DateTime.UtcNow;
     }
 
+    // Transition from Pending to Cancelled when the user or system cancels the payment.
+    // Throws PaymentException if current status is not Pending.
     public void MarkCancelled()
     {
         if (Status != PaymentStatus.Pending)

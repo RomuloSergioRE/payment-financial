@@ -1,8 +1,10 @@
 using MediatR;
-using Payment.Application.Common.Behaviours;
+using Payment.Application.Common.Interfaces;
 
 namespace Payment.Application.Features.Payments.Commands.ProcessPayment;
 
+// Command to process a new payment.
+// Implements IPublishableRequest (outbox message) and ITransactionalRequest (executes within a transaction).
 public sealed record ProcessPaymentCommand(
     Guid UserId,
     string PlanType,
@@ -15,4 +17,4 @@ public sealed record ProcessPaymentCommand(
     int? CardExpiryMonth,
     int? CardExpiryYear,
     string? CardHolderName
-) : IRequest<ProcessPaymentResponse>, IPublishableRequest;
+) : IRequest<ProcessPaymentResponse>, IPublishableRequest, ITransactionalRequest;

@@ -3,6 +3,8 @@ using MediatR;
 
 namespace Payment.Application.Common.Behaviours;
 
+// Runs all FluentValidation validators for the request before the handler executes.
+// Positioned early in the pipeline so invalid requests never reach business logic.
 public sealed class ValidationBehaviour<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
     where TRequest : notnull
 {
@@ -11,11 +13,13 @@ public sealed class ValidationBehaviour<TRequest, TResponse> : IPipelineBehavior
     public ValidationBehaviour(IEnumerable<IValidator<TRequest>> validators)
         => _validators = validators;
 
+    // Executes all registered validators; short-circuits if none exist or throws on failures.
     public async Task<TResponse> Handle(
         TRequest request,
         RequestHandlerDelegate<TResponse> next,
         CancellationToken cancellationToken)
     {
+        // No validators registered — skip validation and proceed.
         if (!_validators.Any())
             return await next();
 
@@ -26,6 +30,7 @@ public sealed class ValidationBehaviour<TRequest, TResponse> : IPipelineBehavior
             .Where(f => f != null)
             .ToList();
 
+        // Any validation failure prevents the handler from running.
         if (failures.Count != 0)
             throw new ValidationException(failures);
 

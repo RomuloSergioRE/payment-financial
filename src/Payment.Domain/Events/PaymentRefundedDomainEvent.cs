@@ -1,5 +1,7 @@
 namespace Payment.Domain.Events;
 
+// Event raised when a previously completed payment has been refunded.
+// Optionally includes a reason for the refund.
 public sealed class PaymentRefundedDomainEvent : IDomainEvent
 {
     public Guid EventId { get; } = Guid.NewGuid();

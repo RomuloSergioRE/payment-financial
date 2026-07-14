@@ -6,6 +6,7 @@ using Payment.Application.Common.Interfaces;
 
 namespace Payment.Application.Features.Payments.Queries.GetPayment;
 
+// Handles GetPaymentQuery by fetching the payment entity and verifying user ownership.
 public sealed class GetPaymentQueryHandler
     : IRequestHandler<GetPaymentQuery, GetPaymentResponse>
 {
@@ -20,10 +21,12 @@ public sealed class GetPaymentQueryHandler
         _logger = logger;
     }
 
+    // Fetches a payment by ID and returns it as a response DTO, enforcing user ownership.
     public async Task<GetPaymentResponse> Handle(
         GetPaymentQuery request,
         CancellationToken cancellationToken)
     {
+        // PASSO 1: Buscar o pagamento pelo ID.
         var payment = await _context.Payments
             .FirstOrDefaultAsync(p => p.Id == request.PaymentId, cancellationToken);
 
@@ -33,6 +36,7 @@ public sealed class GetPaymentQueryHandler
             throw new NotFoundException("Payment", request.PaymentId);
         }
 
+        // PASSO 2: Verificar propriedade — usuário só pode acessar seus próprios pagamentos.
         if (payment.UserId != request.UserId)
         {
             _logger.LogWarning(

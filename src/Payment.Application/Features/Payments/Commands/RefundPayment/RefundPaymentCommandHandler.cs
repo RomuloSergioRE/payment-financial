@@ -10,6 +10,8 @@ using PaymentEntity = Payment.Domain.Entities.Payment;
 
 namespace Payment.Application.Features.Payments.Commands.RefundPayment;
 
+// Handles the RefundPaymentCommand by validating ownership, calling the gateway refund endpoint,
+// and transitioning the payment to Refunded state upon success.
 public sealed class RefundPaymentCommandHandler
     : IRequestHandler<RefundPaymentCommand, RefundPaymentResponse>
 {
@@ -27,10 +29,12 @@ public sealed class RefundPaymentCommandHandler
         _logger = logger;
     }
 
+    // Refunds a payment: validates ownership, calls gateway, and updates status to Refunded.
     public async Task<RefundPaymentResponse> Handle(
         RefundPaymentCommand command,
         CancellationToken cancellationToken)
     {
+        // PASSO 1: Buscar o pagamento e validar existência e propriedade.
         var payment = await _context.Payments
             .FirstOrDefaultAsync(p => p.Id == command.PaymentId, cancellationToken);
 
@@ -40,14 +44,9 @@ public sealed class RefundPaymentCommandHandler
         if (payment.UserId != command.UserId)
             throw new PaymentException("You do not have access to refund this payment.");
 
-        payment.MarkRefunded();
-
-        _context.PaymentLogs.Add(new PaymentLog(
-            payment.Id, PaymentLog.EventTypes.Refunded,
-            new { reason = command.Reason }));
-
         try
         {
+            // PASSO 2: Chamar o gateway ANTES de alterar o estado — se falhar, pagamento continua Completed.
             var result = await _gateway.RefundAsync(
                 payment.Amount.Amount, payment.GatewayPaymentId!);
 
@@ -60,6 +59,13 @@ public sealed class RefundPaymentCommandHandler
                 return new RefundPaymentResponse(
                     payment.Id, "failed", result.GatewayMessage);
             }
+
+            // PASSO 3: Gateway aprovou — marcar como Refunded e registrar log.
+            payment.MarkRefunded();
+
+            _context.PaymentLogs.Add(new PaymentLog(
+                payment.Id, PaymentLog.EventTypes.Refunded,
+                new { reason = command.Reason }));
 
             _logger.LogInformation(
                 "Refund processed for payment {PaymentId}: {GatewayPaymentId}",

@@ -10,6 +10,7 @@ using PaymentDbContext = global::Payment.Infrastructure.Persistence.PaymentDbCon
 
 namespace Payment.IntegrationTests;
 
+// Integration tests for payment processing: end-to-end idempotency and cancellation flows.
 public class ProcessPaymentIntegrationTests : IDisposable
 {
     private readonly PaymentDbContext _context;
@@ -19,9 +20,11 @@ public class ProcessPaymentIntegrationTests : IDisposable
         _context = TestDbContextFactory.CreateInMemoryContext();
     }
 
+    // Given a payment with an existing idempotency key in the database, When a new command with the same key is processed, Then a DuplicatePaymentException is thrown.
     [Fact]
     public async Task IdempotencyCheck_SameKeyReturnsDuplicateException()
     {
+        // Arrange
         TestDbContextFactory.SeedData(_context);
 
         var handler = new ProcessPaymentCommandHandler(
@@ -42,14 +45,18 @@ public class ProcessPaymentIntegrationTests : IDisposable
             DateTime.UtcNow.Year + 1,
             "John Doe");
 
+        // Act
         var act = async () => await handler.Handle(command, CancellationToken.None);
 
+        // Assert
         await act.Should().ThrowAsync<DuplicatePaymentException>();
     }
 
+    // Given a seeded pending payment, When the cancel command is handled, Then the payment status transitions to Cancelled in the database.
     [Fact]
     public async Task CancelPendingPayment_UpdatesStatusToCancelled()
     {
+        // Arrange
         TestDbContextFactory.SeedData(_context);
         var payment = _context.Payments.First();
 
@@ -57,9 +64,11 @@ public class ProcessPaymentIntegrationTests : IDisposable
             _context,
             Mock.Of<ILogger<CancelPaymentCommandHandler>>());
 
+        // Act
         var command = new CancelPaymentCommand(payment.Id, payment.UserId);
         var result = await handler.Handle(command, CancellationToken.None);
 
+        // Assert
         result.Status.Should().Be("cancelled");
         var updatedPayment = await _context.Payments.FindAsync(payment.Id);
         updatedPayment!.Status.Should().Be(PaymentStatus.Cancelled);

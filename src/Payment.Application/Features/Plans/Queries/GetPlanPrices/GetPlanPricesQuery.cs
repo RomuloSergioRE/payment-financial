@@ -1,8 +1,9 @@
 using MediatR;
-using Payment.Application.Common.Behaviours;
+using Payment.Application.Common.Interfaces;
 
 namespace Payment.Application.Features.Plans.Queries.GetPlanPrices;
 
+// Query to retrieve available plan prices. Results are cached for 30 minutes.
 public sealed record GetPlanPricesQuery()
     : IRequest<List<GetPlanPricesResponse>>, ICachableRequest
 {

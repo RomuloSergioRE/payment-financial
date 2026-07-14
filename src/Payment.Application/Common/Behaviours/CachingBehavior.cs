@@ -4,6 +4,9 @@ using Payment.Application.Common.Interfaces;
 
 namespace Payment.Application.Common.Behaviours;
 
+// Intercepts cacheable requests and returns cached responses when available, avoiding handler execution.
+// On cache miss, executes the handler and stores the result with the configured expiration.
+// Only activates when TRequest implements ICachableRequest.
 public sealed class CachingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
     where TRequest : notnull, ICachableRequest
     where TResponse : class
@@ -19,6 +22,7 @@ public sealed class CachingBehavior<TRequest, TResponse> : IPipelineBehavior<TRe
         _logger = logger;
     }
 
+    // Checks cache first; on hit returns early, on miss executes handler and stores result.
     public async Task<TResponse> Handle(
         TRequest request,
         RequestHandlerDelegate<TResponse> next,
@@ -34,16 +38,12 @@ public sealed class CachingBehavior<TRequest, TResponse> : IPipelineBehavior<TRe
 
         _logger.LogInformation("Cache miss for {CacheKey}", request.CacheKey);
 
+        // Cache miss — execute the pipeline to get the response.
         var response = await next();
 
+        // Store the response in cache for subsequent requests.
         await _cache.SetAsync(request.CacheKey, response, request.CacheExpiration, cancellationToken);
 
         return response;
     }
-}
-
-public interface ICachableRequest
-{
-    string CacheKey { get; }
-    TimeSpan? CacheExpiration { get; }
 }

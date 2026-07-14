@@ -5,6 +5,9 @@ using Payment.Domain.Enums;
 
 namespace Payment.Infrastructure.Persistence.Configurations;
 
+// Entity Framework configuration for the Payment aggregate root.
+// Maps the Payment entity to the "payments" table with enums stored as lowercase strings,
+// owned Amount value object, and database-level check constraints.
 public sealed class PaymentConfiguration : IEntityTypeConfiguration<Domain.Entities.Payment>
 {
     public void Configure(EntityTypeBuilder<Domain.Entities.Payment> builder)
@@ -20,6 +23,7 @@ public sealed class PaymentConfiguration : IEntityTypeConfiguration<Domain.Entit
             .HasColumnName("user_id")
             .IsRequired();
 
+        // Store PlanType enum as lowercase string (e.g., "pro", "enterprise")
         builder.Property(p => p.PlanType)
             .HasColumnName("plan_type")
             .HasConversion(
@@ -28,6 +32,7 @@ public sealed class PaymentConfiguration : IEntityTypeConfiguration<Domain.Entit
             .HasMaxLength(20)
             .IsRequired();
 
+        // Map the owned Money value object with Amount and Currency columns
         builder.OwnsOne(p => p.Amount, amount =>
         {
             amount.Property(a => a.Amount)
@@ -42,6 +47,7 @@ public sealed class PaymentConfiguration : IEntityTypeConfiguration<Domain.Entit
                 .IsRequired();
         });
 
+        // Store PaymentMethod enum as lowercase string (e.g., "credit_card", "pix", "boleto")
         builder.Property(p => p.Method)
             .HasColumnName("payment_method")
             .HasConversion(
@@ -50,6 +56,7 @@ public sealed class PaymentConfiguration : IEntityTypeConfiguration<Domain.Entit
             .HasMaxLength(20)
             .IsRequired();
 
+        // Store PaymentStatus enum as lowercase string with "pending" as default
         builder.Property(p => p.Status)
             .HasColumnName("status")
             .HasConversion(
@@ -71,6 +78,7 @@ public sealed class PaymentConfiguration : IEntityTypeConfiguration<Domain.Entit
             .HasColumnName("idempotency_key")
             .HasMaxLength(100);
 
+        // Unique index prevents duplicate payment submissions with the same idempotency key
         builder.HasIndex(p => p.IdempotencyKey)
             .IsUnique()
             .HasDatabaseName("uq_payments_idempotency");
@@ -95,6 +103,7 @@ public sealed class PaymentConfiguration : IEntityTypeConfiguration<Domain.Entit
             .HasDefaultValueSql("NOW()")
             .IsRequired();
 
+        // Performance indexes for common query patterns
         builder.HasIndex(p => p.UserId)
             .HasDatabaseName("idx_payments_user_id");
 
@@ -104,6 +113,7 @@ public sealed class PaymentConfiguration : IEntityTypeConfiguration<Domain.Entit
         builder.HasIndex(p => p.CreatedAt)
             .HasDatabaseName("idx_payments_created_at");
 
+        // Database-level check constraints to enforce valid enum values and amount > 0
         builder.ToTable("payments", t =>
         {
             t.HasCheckConstraint("ck_payments_amount", "amount > 0");

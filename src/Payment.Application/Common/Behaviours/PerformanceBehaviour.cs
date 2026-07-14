@@ -4,6 +4,8 @@ using Microsoft.Extensions.Logging;
 
 namespace Payment.Application.Common.Behaviours;
 
+// Monitors request execution time and logs a warning when it exceeds the threshold.
+// Positioned near the outer pipeline so it measures the full round-trip including other behaviours.
 public sealed class PerformanceBehaviour<TRequest, TResponse>
     : IPipelineBehavior<TRequest, TResponse>
     where TRequest : notnull
@@ -14,6 +16,7 @@ public sealed class PerformanceBehaviour<TRequest, TResponse>
     public PerformanceBehaviour(ILogger<PerformanceBehaviour<TRequest, TResponse>> logger)
         => _logger = logger;
 
+    // Starts a stopwatch, executes the pipeline, and warns if execution exceeded 500 ms.
     public async Task<TResponse> Handle(
         TRequest request,
         RequestHandlerDelegate<TResponse> next,
@@ -25,6 +28,7 @@ public sealed class PerformanceBehaviour<TRequest, TResponse>
 
         timer.Stop();
 
+        // Log a warning only when the request took longer than the configured threshold.
         if (timer.ElapsedMilliseconds > ThresholdMilliseconds)
         {
             _logger.LogWarning(

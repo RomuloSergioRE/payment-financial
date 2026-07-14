@@ -2,6 +2,8 @@ using FluentValidation;
 
 namespace Payment.Application.Features.Payments.Commands.ProcessPayment;
 
+// Validates the ProcessPaymentCommand ensuring all required fields are present
+// and credit card fields are provided when payment method is credit_card.
 public sealed class ProcessPaymentCommandValidator
     : AbstractValidator<ProcessPaymentCommand>
 {

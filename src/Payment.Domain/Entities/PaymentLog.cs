@@ -2,8 +2,11 @@ using System.Text.Json;
 
 namespace Payment.Domain.Entities;
 
+// Immutable audit record that captures every state change or notable occurrence
+// for a given Payment, used for traceability and debugging.
 public sealed class PaymentLog
 {
+    // Well-known event type constants for payment lifecycle events.
     public static class EventTypes
     {
         public const string Created = "payment.created";
@@ -22,6 +25,7 @@ public sealed class PaymentLog
 
     private PaymentLog() { }
 
+    // Create a new log entry. The metadata object is serialized to JSON automatically.
     public PaymentLog(Guid paymentId, string eventType, object? metadata = null)
     {
         Id = Guid.NewGuid();

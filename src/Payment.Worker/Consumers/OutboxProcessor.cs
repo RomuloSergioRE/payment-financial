@@ -9,6 +9,10 @@ using RabbitMQ.Client;
 
 namespace Payment.Worker.Consumers;
 
+// Implements the Transactional Outbox pattern: polls the OutboxMessages table for
+// unpublished events, publishes them to RabbitMQ, and marks them as processed/failed.
+// This guarantees at-least-once delivery without tight coupling between the write
+// model and the message broker.
 public sealed class OutboxProcessor : BackgroundService
 {
     private readonly IServiceProvider _serviceProvider;
@@ -27,6 +31,7 @@ public sealed class OutboxProcessor : BackgroundService
         _connection = connection;
     }
 
+    // Polls for pending outbox messages every 5 seconds
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation("OutboxProcessor started.");
@@ -46,11 +51,13 @@ public sealed class OutboxProcessor : BackgroundService
         }
     }
 
+    // Fetches a batch of unprocessed messages, publishes each one, then updates their status
     private async Task ProcessPendingMessages(CancellationToken cancellationToken)
     {
         using var scope = _serviceProvider.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<IPaymentDbContext>();
 
+        // Only pick messages that haven't been published yet, oldest first
         var messages = await context.OutboxMessages
             .Where(m => m.ProcessedAt == null)
             .OrderBy(m => m.CreatedAt)
@@ -66,6 +73,7 @@ public sealed class OutboxProcessor : BackgroundService
         {
             try
             {
+                // Publish to RabbitMQ only if the connection is available
                 if (_connection is not null && _connection.IsOpen)
                 {
                     PublishToRabbitMq(message);
@@ -84,9 +92,11 @@ public sealed class OutboxProcessor : BackgroundService
             }
         }
 
+        // Single SaveChanges persists all status updates in one DB round-trip
         await context.SaveChangesAsync(cancellationToken);
     }
 
+    // Serializes and publishes a single outbox message to the RabbitMQ topic exchange
     private void PublishToRabbitMq(OutboxMessage message)
     {
         using var channel = _connection!.CreateModel();
@@ -101,6 +111,7 @@ public sealed class OutboxProcessor : BackgroundService
         properties.Timestamp = new AmqpTimestamp(
             DateTimeOffset.UtcNow.ToUnixTimeSeconds());
 
+        // Derive routing key from event type (e.g. "Payment Completed" → "payment.completed")
         var routingKey = message.EventType.ToLowerInvariant()
             .Replace(" ", ".");
 

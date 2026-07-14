@@ -1,5 +1,7 @@
 namespace Payment.Domain.Events;
 
+// Event raised when a payment successfully transitions to Completed.
+// Carries the payment and user identifiers along with transaction details.
 public sealed class PaymentCompletedDomainEvent : IDomainEvent
 {
     public Guid EventId { get; } = Guid.NewGuid();

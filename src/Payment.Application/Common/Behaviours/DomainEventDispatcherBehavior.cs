@@ -6,6 +6,8 @@ using PaymentEntity = Payment.Domain.Entities.Payment;
 
 namespace Payment.Application.Common.Behaviours;
 
+// Collects domain events raised by Payment entities after the handler runs, then logs and clears them.
+// Positioned after the handler so all entity mutations have already occurred before event dispatch.
 public sealed class DomainEventDispatcherBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
     where TRequest : notnull
 {
@@ -20,6 +22,7 @@ public sealed class DomainEventDispatcherBehavior<TRequest, TResponse> : IPipeli
         _logger = logger;
     }
 
+    // Executes the handler, then publishes any domain events raised by Payment entities.
     public async Task<TResponse> Handle(
         TRequest request,
         RequestHandlerDelegate<TResponse> next,
@@ -27,6 +30,7 @@ public sealed class DomainEventDispatcherBehavior<TRequest, TResponse> : IPipeli
     {
         var response = await next();
 
+        // Query EF Core change tracker for Payment entities that have pending domain events.
         var entities = _context.ChangeTracker.Entries<PaymentEntity>()
             .Where(e => e.Entity.DomainEvents.Any())
             .Select(e => e.Entity)

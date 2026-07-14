@@ -14,22 +14,26 @@ using RabbitMQ.Client;
 
 namespace Payment.Infrastructure;
 
+// Composition root for the Infrastructure layer.
+// Registers all infrastructure services (database, messaging, gateway, auth, caching, health checks)
+// into the application's dependency injection container.
 public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructureServices(
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        // PostgreSQL
+        // PostgreSQL via Entity Framework Core
         services.AddDbContext<PaymentDbContext>(options =>
         {
             var connectionString = configuration.GetConnectionString("PaymentDatabase");
             options.UseNpgsql(connectionString);
         });
+        // Register the DbContext abstraction for application layer consumption
         services.AddScoped<IPaymentDbContext>(sp =>
             sp.GetRequiredService<PaymentDbContext>());
 
-        // RabbitMQ (optional - gracefully handles unavailable broker)
+        // RabbitMQ — optional; falls back to NullMessageBus if broker is unavailable
         var connectionHolder = new RabbitMqConnectionHolder();
 
         var rabbitHost = configuration["RabbitMQ:Host"];
@@ -53,6 +57,7 @@ public static class DependencyInjection
             }
             catch (Exception ex)
             {
+                // Build a temporary service provider just to resolve the logger factory
                 var loggerFactory = services.BuildServiceProvider()
                     .GetRequiredService<ILoggerFactory>();
                 var logger = loggerFactory.CreateLogger("Payment.Infrastructure.RabbitMQ");
@@ -78,17 +83,17 @@ public static class DependencyInjection
 
         services.AddSingleton(connectionHolder);
 
-        // Payment Gateway
+        // Payment Gateway (fake implementation for development/testing)
         services.AddScoped<IPaymentGateway, FakePaymentGateway>();
 
-        // JWT
+        // JWT token validation
         services.AddScoped<JwtValidator>();
 
-        // Caching
+        // In-memory caching (single instance only)
         services.AddMemoryCache();
         services.AddSingleton<ICacheService, InMemoryCacheService>();
 
-        // Health Checks
+        // Health checks for readiness probes (tagged as "ready")
         services.AddHealthChecks()
             .AddCheck<PostgresHealthCheck>("postgresql",
                 failureStatus: HealthStatus.Unhealthy,
@@ -98,19 +103,5 @@ public static class DependencyInjection
                 tags: new[] { "ready" });
 
         return services;
-    }
-}
-
-public sealed class RabbitMqConnectionHolder
-{
-    public IConnection? Connection { get; internal set; }
-}
-
-public sealed class NullMessageBus : IMessageBus
-{
-    public Task PublishAsync<T>(T message, string routingKey,
-        CancellationToken cancellationToken = default) where T : class
-    {
-        return Task.CompletedTask;
     }
 }

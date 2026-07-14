@@ -8,6 +8,7 @@ using Payment.Application;
 using Payment.Infrastructure;
 using Serilog;
 
+// Bootstrap logger used before the DI container is built
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console()
     .CreateBootstrapLogger();
@@ -16,6 +17,7 @@ try
 {
     var builder = WebApplication.CreateBuilder(args);
 
+    // Serilog integrated with the host for structured logging throughout the app
     builder.Host.UseSerilog((context, services, configuration) =>
         configuration.ReadFrom.Configuration(context.Configuration)
             .ReadFrom.Services(services));
@@ -23,6 +25,7 @@ try
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen();
 
+    // JWT Bearer authentication with symmetric key from configuration
     builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         .AddJwtBearer(options =>
         {
@@ -45,6 +48,7 @@ try
 
     builder.Services.AddAuthorization();
 
+    // CORS policy with origins from configuration (defaults to localhost:3000)
     builder.Services.AddCors(options =>
     {
         var corsConfig = builder.Configuration.GetSection("Cors:AllowedOrigins");
@@ -58,6 +62,7 @@ try
         });
     });
 
+    // Rate limiting: per-user token bucket ("UserPayment") and fixed-window ("Strict")
     builder.Services.AddRateLimiter(options =>
     {
         options.RejectionStatusCode = 429;
@@ -73,9 +78,11 @@ try
         });
     });
 
+    // Register application (CQRS/Use-Cases) and infrastructure (DB, messaging) services
     builder.Services.AddApplicationServices();
     builder.Services.AddInfrastructureServices(builder.Configuration);
 
+    // 1 MB request size limit applied to all controllers
     builder.Services.AddControllers(options =>
     {
         options.Filters.Add(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(1_048_576));
@@ -83,10 +90,12 @@ try
 
     var app = builder.Build();
 
-    app.UseSerilogRequestLogging();
-    app.UseMiddleware<CorrelationIdMiddleware>();
-    app.UseMiddleware<ExceptionHandlingMiddleware>();
-    app.UseMiddleware<OriginValidationMiddleware>();
+    // -- Middleware pipeline (order matters) --
+
+    app.UseSerilogRequestLogging();            // 1. Request logging
+    app.UseMiddleware<CorrelationIdMiddleware>(); // 2. Correlation ID propagation
+    app.UseMiddleware<ExceptionHandlingMiddleware>(); // 3. Global exception handler
+    app.UseMiddleware<OriginValidationMiddleware>(); // 4. CSRF origin validation
 
     if (app.Environment.IsDevelopment())
     {
@@ -94,12 +103,12 @@ try
         app.UseSwaggerUI();
     }
 
-    app.UseCors();
-    app.UseRateLimiter();
-    app.UseAuthentication();
-    app.UseMiddleware<JwtUserMiddleware>();
-    app.UseAuthorization();
-    app.MapControllers();
+    app.UseCors();                            // 5. CORS headers
+    app.UseRateLimiter();                     // 6. Rate limiting
+    app.UseAuthentication();                  // 7. JWT authentication
+    app.UseMiddleware<JwtUserMiddleware>();   // 8. Extract user ID into HttpContext
+    app.UseAuthorization();                   // 9. Authorization policies
+    app.MapControllers();                     // 10. Map endpoint routes
 
     await app.RunAsync();
 }

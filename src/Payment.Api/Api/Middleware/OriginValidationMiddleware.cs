@@ -1,5 +1,7 @@
 namespace Payment.Api.Middleware;
 
+// Validates the Origin/Referer headers on state-changing requests (POST, PUT, DELETE)
+// against a configured allowlist to prevent CSRF from untrusted origins.
 public sealed class OriginValidationMiddleware
 {
     private readonly RequestDelegate _next;
@@ -13,6 +15,7 @@ public sealed class OriginValidationMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
+        // Only enforce origin checks on state-changing HTTP methods
         if (HttpMethods.IsPost(context.Request.Method) ||
             HttpMethods.IsPut(context.Request.Method) ||
             HttpMethods.IsDelete(context.Request.Method))
@@ -24,6 +27,7 @@ public sealed class OriginValidationMiddleware
                 .GetSection("Cors:AllowedOrigins")
                 .Get<string[]>() ?? ["http://localhost:3000"];
 
+            // Validate the Origin header first (preferred for CORS preflight requests)
             if (!string.IsNullOrEmpty(origin))
             {
                 if (!allowedOrigins.Contains(origin, StringComparer.OrdinalIgnoreCase))
@@ -35,6 +39,7 @@ public sealed class OriginValidationMiddleware
                     return;
                 }
             }
+            // Fall back to extracting the origin from the Referer header
             else if (!string.IsNullOrEmpty(referer))
             {
                 var refererOrigin = new Uri(referer).GetLeftPart(UriPartial.Authority);

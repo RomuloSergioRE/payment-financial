@@ -2,6 +2,8 @@ using FluentValidation;
 
 namespace Payment.Application.Features.Payments.Queries.ListPayments;
 
+// Validates ListPaymentsQuery ensuring UserId is provided, pagination is within bounds,
+// and status filter (if any) matches a valid PaymentStatus value.
 public sealed class ListPaymentsQueryValidator : AbstractValidator<ListPaymentsQuery>
 {
     public ListPaymentsQueryValidator()

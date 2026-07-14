@@ -4,6 +4,9 @@ using Payment.Domain.Entities;
 
 namespace Payment.Infrastructure.Persistence.Configurations;
 
+// Entity Framework configuration for the OutboxMessage entity.
+// Implements the Transactional Outbox pattern: messages are persisted in the same
+// database transaction as domain changes, then dispatched asynchronously by a background worker.
 public sealed class OutboxMessageConfiguration : IEntityTypeConfiguration<OutboxMessage>
 {
     public void Configure(EntityTypeBuilder<OutboxMessage> builder)
@@ -32,6 +35,7 @@ public sealed class OutboxMessageConfiguration : IEntityTypeConfiguration<Outbox
         builder.Property(x => x.Error)
             .HasMaxLength(2000);
 
+        // Filtered index for efficient polling of unprocessed messages only
         builder.HasIndex(x => x.ProcessedAt)
             .HasFilter("\"ProcessedAt\" IS NULL");
     }

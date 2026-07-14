@@ -2,6 +2,7 @@ using FluentValidation;
 
 namespace Payment.Application.Features.Payments.Commands.RefundPayment;
 
+// Validates that PaymentId and UserId are provided in the RefundPaymentCommand.
 public sealed class RefundPaymentCommandValidator : AbstractValidator<RefundPaymentCommand>
 {
     public RefundPaymentCommandValidator()

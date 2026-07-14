@@ -2,6 +2,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Payment.Api.Api.Extensions;
 using Payment.Application.Features.Payments.Commands.CancelPayment;
 using Payment.Application.Features.Payments.Commands.ProcessPayment;
 using Payment.Application.Features.Payments.Commands.RefundPayment;
@@ -10,6 +11,8 @@ using Payment.Application.Features.Payments.Queries.ListPayments;
 
 namespace Payment.Api.Controllers;
 
+// REST API controller for payment operations including creation, retrieval,
+// listing, cancellation and refund. All endpoints require JWT authentication.
 [ApiController]
 [Route("api/payments")]
 [Authorize]
@@ -19,6 +22,7 @@ public sealed class PaymentsController : ControllerBase
 
     public PaymentsController(ISender sender) => _sender = sender;
 
+    // Processes a new payment with idempotency via the Idempotency-Key header.
     [HttpPost]
     [EnableRateLimiting("UserPayment")]
     [ProducesResponseType(typeof(ProcessPaymentResponse), 200)]
@@ -29,7 +33,7 @@ public sealed class PaymentsController : ControllerBase
         [FromBody] ProcessPaymentRequestDto request,
         CancellationToken cancellationToken)
     {
-        var userId = HttpContext.Items["UserId"] as Guid?;
+        var userId = HttpContext.GetUserId();
         if (userId is null)
             return Unauthorized(new { error = "Invalid token" });
 
@@ -54,6 +58,7 @@ public sealed class PaymentsController : ControllerBase
         return Ok(result);
     }
 
+    // Retrieves a single payment by ID, scoped to the authenticated user.
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(GetPaymentResponse), 200)]
     [ProducesResponseType(404)]
@@ -61,7 +66,7 @@ public sealed class PaymentsController : ControllerBase
         Guid id,
         CancellationToken cancellationToken)
     {
-        var userId = HttpContext.Items["UserId"] as Guid?;
+        var userId = HttpContext.GetUserId();
         if (userId is null)
             return Unauthorized(new { error = "Invalid token" });
 
@@ -70,6 +75,7 @@ public sealed class PaymentsController : ControllerBase
         return Ok(result);
     }
 
+    // Lists payments for the authenticated user with pagination and optional status filter.
     [HttpGet]
     [ProducesResponseType(typeof(ListPaymentsResponse), 200)]
     [ProducesResponseType(400)]
@@ -79,7 +85,7 @@ public sealed class PaymentsController : ControllerBase
         [FromQuery] string? status = null,
         CancellationToken cancellationToken = default)
     {
-        var userId = HttpContext.Items["UserId"] as Guid?;
+        var userId = HttpContext.GetUserId();
         if (userId is null)
             return Unauthorized(new { error = "Invalid token" });
 
@@ -88,6 +94,7 @@ public sealed class PaymentsController : ControllerBase
         return Ok(result);
     }
 
+    // Cancels a pending or active payment by ID.
     [HttpDelete("{id:guid}")]
     [EnableRateLimiting("Strict")]
     [ProducesResponseType(typeof(CancelPaymentResponse), 200)]
@@ -97,7 +104,7 @@ public sealed class PaymentsController : ControllerBase
         Guid id,
         CancellationToken cancellationToken)
     {
-        var userId = HttpContext.Items["UserId"] as Guid?;
+        var userId = HttpContext.GetUserId();
         if (userId is null)
             return Unauthorized(new { error = "Invalid token" });
 
@@ -106,6 +113,7 @@ public sealed class PaymentsController : ControllerBase
         return Ok(result);
     }
 
+    // Issues a refund for a completed payment, with an optional reason.
     [HttpPost("{id:guid}/refund")]
     [EnableRateLimiting("Strict")]
     [ProducesResponseType(typeof(RefundPaymentResponse), 200)]
@@ -117,7 +125,7 @@ public sealed class PaymentsController : ControllerBase
         [FromBody] RefundPaymentRequestDto? request = null,
         CancellationToken cancellationToken = default)
     {
-        var userId = HttpContext.Items["UserId"] as Guid?;
+        var userId = HttpContext.GetUserId();
         if (userId is null)
             return Unauthorized(new { error = "Invalid token" });
 

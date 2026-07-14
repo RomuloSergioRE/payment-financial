@@ -5,16 +5,19 @@ using Payment.Application.Common.Models;
 
 namespace Payment.Infrastructure.PaymentGateway;
 
+// Simulated payment gateway for development/testing purposes.
+// Mimics real gateway behavior with random delays, card validation, and configurable success rate.
 public sealed class FakePaymentGateway : IPaymentGateway
 {
-    private readonly Random _random = new();
     private readonly ILogger<FakePaymentGateway> _logger;
 
+    // 90% of simulated transactions will succeed
     private const double SuccessRate = 0.9;
 
     public FakePaymentGateway(ILogger<FakePaymentGateway> logger)
         => _logger = logger;
 
+    // Simulates credit card processing with Luhn validation, expiry check, and random approval/decline
     public async Task<PaymentResult> ProcessCreditCardAsync(
         decimal amount, string cardNumber, string cvv,
         int expiryMonth, int expiryYear, string holderName)
@@ -28,9 +31,10 @@ public sealed class FakePaymentGateway : IPaymentGateway
             return new PaymentResult(
                 false, string.Empty, "Card expired", null);
 
-        await Task.Delay(_random.Next(500, 2000));
+        // Simulate network latency
+        await Task.Delay(Random.Shared.Next(500, 2000));
 
-        var success = _random.NextDouble() < SuccessRate;
+        var success = Random.Shared.NextDouble() < SuccessRate;
 
         if (success)
         {
@@ -49,9 +53,10 @@ public sealed class FakePaymentGateway : IPaymentGateway
         return new PaymentResult(false, string.Empty, "Card declined by issuer", null);
     }
 
+    // Simulates instant PIX payment (always succeeds in the fake implementation)
     public async Task<PaymentResult> ProcessPixAsync(decimal amount)
     {
-        await Task.Delay(_random.Next(100, 500));
+        await Task.Delay(Random.Shared.Next(100, 500));
 
         var pixCode = Guid.NewGuid().ToString("N").ToUpper()[..32];
         var gatewayId = $"pix_{Guid.NewGuid():N}";
@@ -68,6 +73,7 @@ public sealed class FakePaymentGateway : IPaymentGateway
         return new PaymentResult(true, gatewayId, "PIX completed", raw);
     }
 
+    // Simulates boleto generation (always returns pending since boletos require waiting for payment)
     public Task<PaymentResult> ProcessBoletoAsync(decimal amount)
     {
         var nossoNumero = new Bogus.Faker().Random.String2(47, "0123456789");
@@ -88,9 +94,10 @@ public sealed class FakePaymentGateway : IPaymentGateway
             true, gatewayId, "Boleto generated", raw));
     }
 
+    // Simulates refund processing with random delay
     public async Task<PaymentResult> RefundAsync(decimal amount, string gatewayPaymentId)
     {
-        await Task.Delay(_random.Next(200, 800));
+        await Task.Delay(Random.Shared.Next(200, 800));
 
         var refundId = $"refund_{Guid.NewGuid():N}";
         _logger.LogInformation("Refund processed: {RefundId} for gateway payment: {GatewayPaymentId}",
@@ -107,6 +114,8 @@ public sealed class FakePaymentGateway : IPaymentGateway
         return new PaymentResult(true, refundId, "Refund processed", raw);
     }
 
+    // Luhn algorithm for credit card number validation
+    // Doubles every second digit from right to left, sums digits, checks divisibility by 10
     private static bool LuhnCheck(string cardNumber)
     {
         var digits = cardNumber.Where(char.IsDigit).Select(c => int.Parse(c.ToString())).ToArray();
@@ -117,6 +126,7 @@ public sealed class FakePaymentGateway : IPaymentGateway
             var digit = digits[i];
             if (alt)
             {
+                // Double the digit; if result exceeds 9, subtract 9 (equivalent to summing its digits)
                 digit *= 2;
                 if (digit > 9) digit -= 9;
             }
@@ -126,6 +136,7 @@ public sealed class FakePaymentGateway : IPaymentGateway
         return sum % 10 == 0;
     }
 
+    // Determines card brand from the first digit (IIN/BIN prefix)
     private static string GetFakeBrand(string cardNumber)
         => cardNumber[0] switch
         {

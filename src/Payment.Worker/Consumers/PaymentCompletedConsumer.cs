@@ -7,6 +7,8 @@ using RabbitMQ.Client.Events;
 
 namespace Payment.Worker.Consumers;
 
+// Background consumer that listens for payment.completed events from RabbitMQ.
+// Declares the exchange/queue, consumes messages with manual ACK, and logs processing details.
 public sealed class PaymentCompletedConsumer : BackgroundService
 {
     private readonly IConnection _connection;
@@ -25,6 +27,7 @@ public sealed class PaymentCompletedConsumer : BackgroundService
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // Create a channel and declare the topic exchange and durable queue
         var channel = _connection.CreateModel();
 
         channel.ExchangeDeclare(ExchangeName, ExchangeType.Topic, durable: true);
@@ -41,6 +44,7 @@ public sealed class PaymentCompletedConsumer : BackgroundService
                 _logger.LogInformation(
                     "Received payment.completed event: {Body}", body);
 
+                // Parse the event payload and extract key fields for logging
                 var payload = JsonSerializer.Deserialize<JsonElement>(body);
 
                 if (payload.TryGetProperty("data", out var data))
@@ -58,11 +62,13 @@ public sealed class PaymentCompletedConsumer : BackgroundService
                 }
 
                 await Task.CompletedTask;
+                // Manual ACK: message processed successfully, remove from queue
                 channel.BasicAck(ea.DeliveryTag, false);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error processing payment.completed event");
+                // Nack with requeue so the message can be retried later
                 channel.BasicNack(ea.DeliveryTag, false, true);
             }
         };

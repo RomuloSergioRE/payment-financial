@@ -12,6 +12,7 @@ using Payment.Domain.Exceptions;
 
 namespace Payment.UnitTests.Api;
 
+// Tests for the ExceptionHandlingMiddleware: maps exceptions to correct HTTP status codes.
 public class ExceptionHandlingMiddlewareTests
 {
     private readonly Mock<ILogger<ExceptionHandlingMiddleware>> _loggerMock = new();
@@ -25,9 +26,11 @@ public class ExceptionHandlingMiddlewareTests
             .BuildServiceProvider();
     }
 
+    // Given a ValidationException with field errors, When the middleware catches it, Then a 400 response with JSON content is returned.
     [Fact]
     public async Task ValidationException_Returns400WithDetails()
     {
+        // Arrange
         var errors = new List<ValidationFailure>
         {
             new("Amount", "Amount must be greater than 0"),
@@ -38,74 +41,96 @@ public class ExceptionHandlingMiddlewareTests
         var middleware = new ExceptionHandlingMiddleware(
             _ => throw exception, _loggerMock.Object);
 
+        // Act
         await middleware.InvokeAsync(_httpContext);
 
+        // Assert
         _httpContext.Response.StatusCode.Should().Be(400);
         _httpContext.Response.ContentType.Should().Be("application/json");
     }
 
+    // Given a NotFoundException, When the middleware catches it, Then a 404 response with JSON content is returned.
     [Fact]
     public async Task NotFoundException_Returns404()
     {
+        // Arrange
         var middleware = new ExceptionHandlingMiddleware(
             _ => throw new NotFoundException("Payment", Guid.NewGuid()),
             _loggerMock.Object);
 
+        // Act
         await middleware.InvokeAsync(_httpContext);
 
+        // Assert
         _httpContext.Response.StatusCode.Should().Be(404);
         _httpContext.Response.ContentType.Should().Be("application/json");
     }
 
+    // Given a DuplicatePaymentException, When the middleware catches it, Then a 409 response with JSON content is returned.
     [Fact]
     public async Task DuplicatePaymentException_Returns409()
     {
+        // Arrange
         var middleware = new ExceptionHandlingMiddleware(
             _ => throw new DuplicatePaymentException("test-key"),
             _loggerMock.Object);
 
+        // Act
         await middleware.InvokeAsync(_httpContext);
 
+        // Assert
         _httpContext.Response.StatusCode.Should().Be(409);
         _httpContext.Response.ContentType.Should().Be("application/json");
     }
 
+    // Given a PaymentException (business rule), When the middleware catches it, Then a 422 response with JSON content is returned.
     [Fact]
     public async Task PaymentException_Returns422()
     {
+        // Arrange
         var middleware = new ExceptionHandlingMiddleware(
             _ => throw new PaymentException("Business rule violation"),
             _loggerMock.Object);
 
+        // Act
         await middleware.InvokeAsync(_httpContext);
 
+        // Assert
         _httpContext.Response.StatusCode.Should().Be(422);
         _httpContext.Response.ContentType.Should().Be("application/json");
     }
 
+    // Given an unhandled exception, When the middleware catches it, Then a 500 response with JSON content is returned.
     [Fact]
     public async Task UnhandledException_Returns500()
     {
+        // Arrange
         var middleware = new ExceptionHandlingMiddleware(
             _ => throw new InvalidOperationException("Something went wrong"),
             _loggerMock.Object);
 
+        // Act
         await middleware.InvokeAsync(_httpContext);
 
+        // Assert
         _httpContext.Response.StatusCode.Should().Be(500);
         _httpContext.Response.ContentType.Should().Be("application/json");
     }
 
+    // Given no exception is thrown, When the middleware runs, Then the next delegate is called and status is 200.
     [Fact]
     public async Task NoException_CallsNext()
     {
+        // Arrange
         var nextCalled = false;
         var middleware = new ExceptionHandlingMiddleware(
             _ => { nextCalled = true; return Task.CompletedTask; },
             _loggerMock.Object);
 
+        // Act
         await middleware.InvokeAsync(_httpContext);
 
+        // Assert
         nextCalled.Should().BeTrue();
         _httpContext.Response.StatusCode.Should().Be(200);
     }

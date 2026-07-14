@@ -2,6 +2,7 @@ using FluentValidation;
 
 namespace Payment.Application.Features.Payments.Commands.CancelPayment;
 
+// Validates that PaymentId and UserId are provided in the CancelPaymentCommand.
 public sealed class CancelPaymentCommandValidator
     : AbstractValidator<CancelPaymentCommand>
 {

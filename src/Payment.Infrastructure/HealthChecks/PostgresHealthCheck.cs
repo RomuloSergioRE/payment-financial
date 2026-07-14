@@ -4,6 +4,7 @@ using Payment.Infrastructure.Persistence;
 
 namespace Payment.Infrastructure.HealthChecks;
 
+// Health check that verifies PostgreSQL connectivity by executing a simple SELECT 1 query.
 public sealed class PostgresHealthCheck : IHealthCheck
 {
     private readonly PaymentDbContext _context;
@@ -17,6 +18,7 @@ public sealed class PostgresHealthCheck : IHealthCheck
     {
         try
         {
+            // Minimal query to verify the database connection is alive
             await _context.Database.ExecuteSqlRawAsync("SELECT 1", cancellationToken);
             return HealthCheckResult.Healthy("PostgreSQL is reachable.");
         }

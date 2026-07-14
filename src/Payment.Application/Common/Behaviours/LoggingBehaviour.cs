@@ -3,6 +3,8 @@ using Microsoft.Extensions.Logging;
 
 namespace Payment.Application.Common.Behaviours;
 
+// Logs the start and completion of every MediatR request handler.
+// Outermost behaviour in the pipeline — wraps all other behaviours and the handler itself.
 public sealed class LoggingBehaviour<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
     where TRequest : notnull
 {
@@ -11,6 +13,7 @@ public sealed class LoggingBehaviour<TRequest, TResponse> : IPipelineBehavior<TR
     public LoggingBehaviour(ILogger<LoggingBehaviour<TRequest, TResponse>> logger)
         => _logger = logger;
 
+    // Logs the request type before and after the pipeline executes.
     public async Task<TResponse> Handle(
         TRequest request,
         RequestHandlerDelegate<TResponse> next,

@@ -5,6 +5,8 @@ using Payment.Domain.Exceptions;
 
 namespace Payment.Api.Middleware;
 
+// Global exception handler that catches all unhandled exceptions and maps them
+// to appropriate HTTP status codes with a consistent JSON error response.
 public sealed class ExceptionHandlingMiddleware
 {
     private readonly RequestDelegate _next;
@@ -24,6 +26,7 @@ public sealed class ExceptionHandlingMiddleware
         {
             await _next(context);
         }
+        // FluentValidation errors → 400 with field-level details
         catch (ValidationException ex)
         {
             _logger.LogWarning(ex, "Validation failed");
@@ -42,6 +45,7 @@ public sealed class ExceptionHandlingMiddleware
                 details = errors
             });
         }
+        // Duplicate idempotency key → 409 Conflict
         catch (DuplicatePaymentException ex)
         {
             _logger.LogWarning(ex, "Duplicate payment detected");
@@ -49,6 +53,7 @@ public sealed class ExceptionHandlingMiddleware
             context.Response.ContentType = "application/json";
             await WriteJsonAsync(context, new { error = ex.Message });
         }
+        // Domain not-found → 404
         catch (NotFoundException ex)
         {
             _logger.LogWarning(ex, "Resource not found");
@@ -56,6 +61,7 @@ public sealed class ExceptionHandlingMiddleware
             context.Response.ContentType = "application/json";
             await WriteJsonAsync(context, new { error = ex.Message });
         }
+        // Business-rule violations → 422 Unprocessable Entity
         catch (PaymentException ex)
         {
             _logger.LogWarning(ex, "Payment error");
@@ -63,6 +69,7 @@ public sealed class ExceptionHandlingMiddleware
             context.Response.ContentType = "application/json";
             await WriteJsonAsync(context, new { error = ex.Message });
         }
+        // Catch-all for unexpected errors → 500; exposes details only in Development
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unhandled exception");

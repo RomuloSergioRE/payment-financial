@@ -8,6 +8,8 @@ using Payment.Application.Common.Models;
 
 namespace Payment.Infrastructure.Auth;
 
+// Validates JWT tokens using HMAC-SHA256 and extracts user claims.
+// Returns a Result pattern to avoid throwing exceptions on invalid tokens.
 public sealed class JwtValidator
 {
     private readonly JwtSecurityTokenHandler _handler;
@@ -32,16 +34,19 @@ public sealed class JwtValidator
             ValidateAudience = true,
             ValidAudience = configuration["Jwt:Audience"] ?? "zenyfin-payment",
             ValidateLifetime = true,
+            // No clock skew tolerance — tokens expire exactly at their expiration time
             ClockSkew = TimeSpan.Zero
         };
     }
 
+    // Validates a JWT token and extracts userId, role, and plan claims into a JwtPayload
     public Result<JwtPayload> ValidateToken(string token)
     {
         try
         {
             var principal = _handler.ValidateToken(token, _parameters, out var validatedToken);
 
+            // Ensure the token uses HMAC-SHA256 algorithm
             if (validatedToken is not JwtSecurityToken jwtToken ||
                 !jwtToken.Header.Alg.Equals(
                     SecurityAlgorithms.HmacSha256,

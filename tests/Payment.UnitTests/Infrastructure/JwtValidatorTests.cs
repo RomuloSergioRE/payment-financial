@@ -10,6 +10,7 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace Payment.UnitTests.Infrastructure;
 
+// Tests for the JwtValidator: token validation, expiry, signature, issuer, and claims verification.
 public class JwtValidatorTests : IDisposable
 {
     private const string TestSecret = "test-secret-key-for-jwt-validation-tests-32ch";
@@ -57,35 +58,45 @@ public class JwtValidatorTests : IDisposable
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
+    // Given a valid token with all required claims, When validated, Then a successful result with role and plan is returned.
     [Fact]
     public void ValidToken_ReturnsSuccess()
     {
+        // Arrange
         var token = GenerateValidToken(
             userId: Guid.NewGuid(), role: "admin", plan: "enterprise");
 
+        // Act
         var result = _validator.ValidateToken(token);
 
+        // Assert
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().NotBeNull();
         result.Value!.Role.Should().Be("admin");
         result.Value.Plan.Should().Be("enterprise");
     }
 
+    // Given an expired token, When validated, Then a failure result with "Token expired" is returned.
     [Fact]
     public void ExpiredToken_ReturnsFailure()
     {
+        // Arrange
         var token = GenerateValidToken(
             expiry: DateTime.UtcNow.AddMinutes(-10));
 
+        // Act
         var result = _validator.ValidateToken(token);
 
+        // Assert
         result.IsSuccess.Should().BeFalse();
         result.Error.Should().Be("Token expired");
     }
 
+    // Given a token signed with a wrong key, When validated, Then a failure result with "Invalid token" is returned.
     [Fact]
     public void InvalidSignature_ReturnsFailure()
     {
+        // Arrange
         var wrongKey = new SymmetricSecurityKey(
             Encoding.UTF8.GetBytes("wrong-secret-key-32-chars-long!!!!!!!!"));
         var creds = new SigningCredentials(wrongKey, SecurityAlgorithms.HmacSha256);
@@ -98,15 +109,19 @@ public class JwtValidatorTests : IDisposable
             signingCredentials: creds);
         var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
 
+        // Act
         var result = _validator.ValidateToken(tokenString);
 
+        // Assert
         result.IsSuccess.Should().BeFalse();
         result.Error.Should().Be("Invalid token");
     }
 
+    // Given a token missing the userId claim, When validated, Then a failure result with "Missing required claims" is returned.
     [Fact]
     public void MissingUserId_ReturnsFailure()
     {
+        // Arrange
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(TestSecret));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
@@ -122,15 +137,19 @@ public class JwtValidatorTests : IDisposable
             signingCredentials: creds);
         var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
 
+        // Act
         var result = _validator.ValidateToken(tokenString);
 
+        // Assert
         result.IsSuccess.Should().BeFalse();
         result.Error.Should().Be("Missing required claims");
     }
 
+    // Given a token missing the role claim, When validated, Then a failure result with "Missing required claims" is returned.
     [Fact]
     public void MissingRole_ReturnsFailure()
     {
+        // Arrange
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(TestSecret));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
@@ -146,15 +165,19 @@ public class JwtValidatorTests : IDisposable
             signingCredentials: creds);
         var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
 
+        // Act
         var result = _validator.ValidateToken(tokenString);
 
+        // Assert
         result.IsSuccess.Should().BeFalse();
         result.Error.Should().Be("Missing required claims");
     }
 
+    // Given a token with a wrong issuer, When validated, Then a failure result with "Invalid token" is returned.
     [Fact]
     public void WrongIssuer_ReturnsFailure()
     {
+        // Arrange
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(TestSecret));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
@@ -166,17 +189,22 @@ public class JwtValidatorTests : IDisposable
             signingCredentials: creds);
         var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
 
+        // Act
         var result = _validator.ValidateToken(tokenString);
 
+        // Assert
         result.IsSuccess.Should().BeFalse();
         result.Error.Should().Be("Invalid token");
     }
 
+    // Given a malformed token string, When validated, Then a failure result with "Invalid token" is returned.
     [Fact]
     public void MalformedToken_ReturnsFailure()
     {
+        // Act
         var result = _validator.ValidateToken("not-a-valid-jwt-token");
 
+        // Assert
         result.IsSuccess.Should().BeFalse();
         result.Error.Should().Be("Invalid token");
     }

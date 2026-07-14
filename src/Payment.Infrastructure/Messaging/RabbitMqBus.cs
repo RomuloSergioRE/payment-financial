@@ -7,6 +7,8 @@ using RabbitMQ.Client;
 
 namespace Payment.Infrastructure.Messaging;
 
+// RabbitMQ message bus implementation using the Topic exchange pattern.
+// Serializes messages to JSON and publishes with retry policy for transient failures.
 public sealed class RabbitMqBus : IMessageBus
 {
     private readonly IConnection _connection;
@@ -19,9 +21,11 @@ public sealed class RabbitMqBus : IMessageBus
         _logger = logger;
     }
 
+    // Publishes a message to the specified routing key with exponential backoff retry (3 attempts)
     public async Task PublishAsync<T>(T message, string routingKey,
         CancellationToken cancellationToken = default) where T : class
     {
+        // Exponential backoff: 200ms, 400ms, 800ms between retries
         var retry = Policy
             .Handle<Exception>()
             .WaitAndRetryAsync(3,
@@ -37,6 +41,7 @@ public sealed class RabbitMqBus : IMessageBus
         {
             await Task.Run(() =>
             {
+                // Create a short-lived channel for each publish (RabbitMQ channels are lightweight)
                 using var channel = _connection.CreateModel();
                 channel.ExchangeDeclare(
                     ExchangeName, ExchangeType.Topic, durable: true);
