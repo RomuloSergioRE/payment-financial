@@ -43,6 +43,7 @@ Microserviço de pagamentos do ecossistema zenyFin. Processa upgrades de plano (
 | Cache | Microsoft.Extensions.Caching.Memory |
 | Health Checks | Microsoft.Extensions.Diagnostics.HealthChecks |
 | Testes | xUnit + Moq + FluentAssertions |
+| CI/CD | GitHub Actions |
 | Documentação | Swagger / Swashbuckle 6 |
 
 ## Estrutura do Projeto
@@ -50,6 +51,9 @@ Microserviço de pagamentos do ecossistema zenyFin. Processa upgrades de plano (
 ```
 payment-financial/
 ├── Payment.Api.sln
+├── .github/
+│   └── workflows/
+│       └── ci.yml                 # GitHub Actions CI Pipeline
 ├── src/
 │   ├── Payment.Api/              # API + DI + Middleware
 │   │   └── Api/
@@ -297,6 +301,47 @@ dotnet test tests/Payment.UnitTests
 dotnet test --collect:"XPlat Code Coverage"
 ```
 
+## CI/CD Pipeline
+
+O projeto utiliza **GitHub Actions** para integração contínua. O pipeline roda automaticamente a cada push nas branches `master` e `dev`, e em Pull Requests.
+
+### Jobs
+
+| Job | Função | Timeout |
+|-----|--------|---------|
+| **build** | Restaura dependências e compila a solução | 10 min |
+| **test** | Roda unit tests (84+) e integration tests | 15 min |
+| **quality** | Verifica formatação (`dotnet format`) e pacotes vulneráveis | 10 min |
+
+### Fluxo
+
+```
+Push/PR → build → test + quality (paralelo)
+```
+
+### Como funciona
+
+1. **build** — `dotnet restore` + `dotnet build --configuration Release`
+2. **test** — `dotnet test` nos projetos UnitTests e IntegrationTests com cobertura
+3. **quality** — `dotnet format --verify-no-changes` + `dotnet list package --vulnerable`
+
+### Extras
+
+- Cache automático de pacotes NuGet (builds mais rápidas)
+- Cancelamento de runs anteriores na mesma branch
+- Upload de resultados de teste como artifacts (7 dias de retenção)
+
+### Rodar localmente
+
+```bash
+# Simular o pipeline localmente
+dotnet restore
+dotnet build --configuration Release
+dotnet test tests/Payment.UnitTests
+dotnet test tests/Payment.IntegrationTests
+dotnet format --verify-no-changes
+```
+
 ## Arquitetura Aplicada
 
 ### Fluxo de uma Requisição
@@ -364,6 +409,7 @@ Consulte [docs/integracao-frontend-backend.md](docs/integracao-frontend-backend.
 - [x] Fase 5: API
 - [x] Fase 8: Testes
 - [x] Funcionalidades do Roadmap: Health Checks, ListPayments, Unit of Work, Correlation ID, Refund Flow, Outbox Pattern, Domain Events, Caching, Per-user Rate Limiting, Worker Service
+- [x] CI/CD Pipeline (GitHub Actions)
 
 ## Licença
 
